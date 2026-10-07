@@ -56,9 +56,14 @@ const UNDERSCORE_CASES=BASE_COVERAGE_CASES.map(item=>item.source==="prom"?{...it
 const COVERAGE_CASES=[...UNDERSCORE_CASES,...Object.entries(DOTTED_SOURCE_PAIRS).map(([sourceCase,id])=>({...UNDERSCORE_CASES.find(item=>item.id===sourceCase),id,source_strategy:"NoTranslation",source_case:sourceCase}))];
 
 let model={source:"otlp",sourceStrategy:DEFAULT_TRANSLATION,stages:[collector("prom")],final:destination({honorLabels:true})};
+let comparisonMode=false;
+let compareModel=null;
 let selectedRange={start:0,end:0};
 let activeConnections=[];
 const clone=value=>JSON.parse(JSON.stringify(value));
+function usingModel(target,callback){const previous=model;model=target;try{return callback()}finally{model=previous}}
+function evidenceFor(target){return usingModel(target,()=>matchedCoverageCase())}
+function computeFor(target){return usingModel(target,()=>compute())}
 function outputOfStage(stage){return stage.exporter}
 function inputProtocolAt(stageIndex){let p=model.source;for(let i=0;i<stageIndex;i++)p=outputOfStage(model.stages[i]);return p}
 function finalInputProtocol(){return model.stages.length?outputOfStage(model.stages.at(-1)):model.source}
@@ -204,7 +209,7 @@ function interpretation(node,input){
 function renderControls(){
   const hasCollector=Boolean(model.stages.length);
   document.querySelector("#component-list").innerHTML=`<button class="component-button" data-add="collector" ${hasCollector?"disabled":""}>${hasCollector?"Collector already added":"Add Collector"}</button><p class="control-help">The experiment covers a direct SDK route or one Collector before the fixed final Prometheus server.</p>`;
-  const add=document.querySelector('[data-add="collector"]');if(add&&!hasCollector)add.onclick=()=>{model.stages.push(collector("otlp"));selectedRange={start:0,end:0};render()};
+  const add=document.querySelector('[data-add="collector"]');if(add&&!hasCollector)add.onclick=()=>{model.stages.push(collector("otlp"));if(comparisonMode)compareModel.stages.push(collector("otlp"));selectedRange={start:0,end:0};render()};
 }
 function settingToggle(owner,index,key,label,value,scope){return `<div class="node-setting"><span><b>${label}</b><small>${scope}</small></span><label class="switch" aria-label="Toggle ${label}"><input type="checkbox" data-setting-owner="${owner}" data-setting-index="${index}" data-setting-key="${key}" ${value?"checked":""}><i></i></label></div>`}
 function translationControl(owner,index,value,scope){return `<label class="translation-setting"><span><b>translation_strategy</b><small>${scope}</small></span><select data-setting-owner="${owner}" data-setting-index="${index}" data-setting-key="translationStrategy">${TRANSLATION_OPTIONS.map(([v,label])=>`<option value="${v}" ${value===v?"selected":""}>${label}</option>`).join("")}</select></label>`}
@@ -221,17 +226,24 @@ function stageButtons(i){return `<div class="stage-actions"><button data-move-le
 function finalNode(){const input=finalInputProtocol();return `<div class="pipe-node composite fixed-node" data-family="prom"><span class="node-kind">Fixed destination</span><b>Prometheus server</b><label>ingestion<input value="${INGEST[input]}" disabled></label>${componentSettings(model.final,input,"final",0)}<small>Final queryable storage · cannot be removed</small></div>`}
 function componentFamily(node){return node?.type==="final"?"prom":"otel"}
 function protocolFamily(protocol){return protocol==="otlp"?"otel":"prom"}
-function renderWorkbench(){
-  const parts=[sourceNode()];model.stages.forEach((s,i)=>{const active=i>=selectedRange.start&&i<=selectedRange.end,fromFamily=i===0?"otel":componentFamily(model.stages[i-1]),toFamily=componentFamily(s);parts.push(`<button class="pipe-arrow ${active?"active":""}" data-boundary="${i}" data-from-family="${fromFamily}" data-to-family="${toFamily}" aria-pressed="${active}" aria-label="Select boundary ${i+1}"><span></span></button>`);parts.push(stageNode(s,i))});const finalBoundary=model.stages.length,finalActive=finalBoundary>=selectedRange.start&&finalBoundary<=selectedRange.end,finalFrom=model.stages.length?componentFamily(model.stages.at(-1)):"otel";parts.push(`<button class="pipe-arrow ${finalActive?"active":""}" data-boundary="${finalBoundary}" data-from-family="${finalFrom}" data-to-family="prom" aria-pressed="${finalActive}" aria-label="Select final boundary"><span></span></button>`);parts.push(finalNode());document.querySelector("#pipeline").innerHTML=parts.join("");
-  document.querySelector("[data-source-output]").onchange=e=>{model.source=e.target.value;render()};
-  document.querySelectorAll("[data-exporter]").forEach(el=>el.onchange=e=>{model.stages[+e.target.dataset.exporter].exporter=e.target.value;render()});
-  document.querySelectorAll("[data-setting-key]").forEach(el=>el.onchange=e=>updateSetting(e.target));
-  document.querySelectorAll("[data-boundary]").forEach(b=>b.onclick=()=>selectBoundary(+b.dataset.boundary));
-  document.querySelectorAll("[data-remove-stage]").forEach(b=>b.onclick=()=>{model.stages.splice(+b.dataset.removeStage,1);clampSelection();render()});
-  document.querySelectorAll("[data-move-left]").forEach(b=>b.onclick=()=>moveStage(+b.dataset.moveLeft,-1));document.querySelectorAll("[data-move-right]").forEach(b=>b.onclick=()=>moveStage(+b.dataset.moveRight,1));
-  const selectedCount=selectedRange.end-selectedRange.start+1;document.querySelector("#boundary-selection-help").textContent=selectedCount===1?"One boundary selected. Click another arrow to extend the comparison across every component between them.":`${selectedCount} consecutive boundaries selected. Click a selected arrow to start a new range.`;
-  const evidence=matchedCoverageCase(),paired=pairedCoverageCase(evidence),status=document.querySelector("#coverage-status"),matrixCase=document.querySelector("#matrix-current-case");status.textContent=evidence?`LAB TESTED · ${evidence.id}${paired?` · PAIRED WITH ${paired.id}`:""}`:"NO EXACT MATRIX MATCH";status.style.background=evidence?"#e7f5f2":"#fff6dc";status.style.color=evidence?"#087368":"#775d00";if(matrixCase)matrixCase.textContent=evidence?`${evidence.id}${paired?` ↔ ${paired.id}`:""}`:"—";const banner=document.querySelector("#unsupported-banner");banner.hidden=Boolean(evidence);banner.textContent="This combination does not match an exact Lab tuple.";renderInspector();
+function pipelineMarkup(target,lane){return usingModel(target,()=>{const parts=[sourceNode()];model.stages.forEach((s,i)=>{const active=i>=selectedRange.start&&i<=selectedRange.end,fromFamily=i===0?"otel":componentFamily(model.stages[i-1]),toFamily=componentFamily(s);parts.push(`<button class="pipe-arrow ${active?"active":""}" data-boundary="${i}" data-from-family="${fromFamily}" data-to-family="${toFamily}" aria-pressed="${active}" aria-label="Select boundary ${i+1} in Pipeline ${lane.toUpperCase()}"><span></span></button>`);parts.push(stageNode(s,i))});const finalBoundary=model.stages.length,finalActive=finalBoundary>=selectedRange.start&&finalBoundary<=selectedRange.end,finalFrom=model.stages.length?componentFamily(model.stages.at(-1)):"otel";parts.push(`<button class="pipe-arrow ${finalActive?"active":""}" data-boundary="${finalBoundary}" data-from-family="${finalFrom}" data-to-family="prom" aria-pressed="${finalActive}" aria-label="Select final boundary in Pipeline ${lane.toUpperCase()}"><span></span></button>`);parts.push(finalNode());return `<div class="pipeline" data-pipeline-lane="${lane}" aria-label="Pipeline ${lane.toUpperCase()}">${parts.join("")}</div>`})}
+function laneMarkup(target,lane){const evidence=evidenceFor(target);return `<section class="pipeline-lane pipeline-lane-${lane}"><header><b>Pipeline ${lane.toUpperCase()}</b><span>${evidence?`LAB TESTED · ${evidence.id}`:"NO EXACT MATRIX MATCH"}</span></header>${pipelineMarkup(target,lane)}</section>`}
+function bindPipelineInteractions(lane,target){
+  lane.querySelector("[data-source-output]").onchange=e=>{target.source=e.target.value;render()};
+  lane.querySelectorAll("[data-exporter]").forEach(el=>el.onchange=e=>{target.stages[+e.target.dataset.exporter].exporter=e.target.value;render()});
+  lane.querySelectorAll("[data-setting-key]").forEach(el=>el.onchange=e=>updateSetting(e.target,target));
+  lane.querySelectorAll("[data-boundary]").forEach(b=>b.onclick=()=>selectBoundary(+b.dataset.boundary));
+  lane.querySelectorAll("[data-remove-stage]").forEach(b=>b.onclick=()=>{const index=+b.dataset.removeStage;model.stages.splice(index,1);if(comparisonMode)compareModel.stages.splice(index,1);clampSelection();render()});
 }
+function renderWorkbench(){
+  const host=document.querySelector("#pipeline-host");host.classList.toggle("compare-lanes",comparisonMode);host.innerHTML=comparisonMode?laneMarkup(model,"a")+laneMarkup(compareModel,"b"):pipelineMarkup(model,"a");
+  host.querySelectorAll("[data-pipeline-lane]").forEach((lane,index)=>bindPipelineInteractions(lane,index===0?model:compareModel));
+  document.querySelectorAll("[data-workbench-mode]").forEach(button=>{const active=button.dataset.workbenchMode===(comparisonMode?"compare":"trace");button.setAttribute("aria-pressed",String(active));button.onclick=()=>setWorkbenchMode(button.dataset.workbenchMode)});
+  document.querySelector("#workbench-title").textContent=comparisonMode?"PIPELINE COMPARISON":"BOUNDARY TRACE";
+  const selectedCount=selectedRange.end-selectedRange.start+1;document.querySelector("#boundary-selection-help").textContent=selectedCount===1?"One boundary selected. Click another arrow to extend the comparison across every component between them.":`${selectedCount} consecutive boundaries selected. Click a selected arrow to start a new range.`;
+  const evidence=evidenceFor(model),comparisonEvidence=comparisonMode?evidenceFor(compareModel):null,paired=pairedCoverageCase(evidence),status=document.querySelector("#coverage-status"),matrixCase=document.querySelector("#matrix-current-case"),allTested=Boolean(evidence)&&(!comparisonMode||Boolean(comparisonEvidence));status.textContent=comparisonMode?`A · ${evidence?.id||"—"}  ↔  B · ${comparisonEvidence?.id||"—"}`:evidence?`LAB TESTED · ${evidence.id}${paired?` · PAIRED WITH ${paired.id}`:""}`:"NO EXACT MATRIX MATCH";status.style.background=allTested?"#e7f5f2":"#fff6dc";status.style.color=allTested?"#087368":"#775d00";if(matrixCase)matrixCase.textContent=comparisonMode?`A ${evidence?.id||"—"} · B ${comparisonEvidence?.id||"—"}`:evidence?`${evidence.id}${paired?` ↔ ${paired.id}`:""}`:"—";const banner=document.querySelector("#unsupported-banner");banner.hidden=allTested;banner.textContent=comparisonMode?"At least one pipeline does not match an exact Lab tuple.":"This combination does not match an exact Lab tuple.";renderInspector();
+}
+function setWorkbenchMode(mode){const next=mode==="compare";if(next&&!comparisonMode)compareModel=clone(model);comparisonMode=next;render()}
 function selectBoundary(index){
   const {start,end}=selectedRange;
   if(start===end&&index!==start)selectedRange={start:Math.min(start,index),end:Math.max(start,index)};
@@ -240,25 +252,39 @@ function selectBoundary(index){
   renderWorkbench();
 }
 function clampSelection(){const max=model.stages.length;selectedRange.start=Math.min(selectedRange.start,max);selectedRange.end=Math.min(selectedRange.end,max);if(selectedRange.start>selectedRange.end)selectedRange.start=selectedRange.end}
-function updateSetting(el){
-  if(el.dataset.settingOwner==="source")model.sourceStrategy=el.value;
-  else{const target=el.dataset.settingOwner==="final"?model.final:model.stages[+el.dataset.settingIndex];target[el.dataset.settingKey]=el.type==="checkbox"?el.checked:el.value}
-  renderWorkbench();
+function updateSetting(el,targetModel=model){
+  if(el.dataset.settingOwner==="source")targetModel.sourceStrategy=el.value;
+  else{const target=el.dataset.settingOwner==="final"?targetModel.final:targetModel.stages[+el.dataset.settingIndex];target[el.dataset.settingKey]=el.type==="checkbox"?el.checked:el.value}
+  render();
 }
 function moveStage(i,delta){const j=i+delta;if(j<0||j>=model.stages.length)return;[model.stages[i],model.stages[j]]=[model.stages[j],model.stages[i]];render()}
 function componentName(node){return node.type==="source"?"OTel SDK":node.type==="collector"?"Collector":"Prometheus server"}
 function componentPathName(node,index,logical){if(node.type==="collector"){const total=logical.filter(item=>item.type==="collector").length,ordinal=logical.slice(0,index+1).filter(item=>item.type==="collector").length;return total>1?`Collector ${ordinal}`:"Collector"}return componentName(node)}
 function renderInspector(){
+  if(comparisonMode){renderComparisonInspector();return}
   const {logical,states}=compute(),start=selectedRange.start,end=selectedRange.end,before=states[start],after=states[end+1],nodes=logical.slice(start+1,end+2),path=logical.slice(start,end+2),beforeRows=stateRows(before),afterRows=stateRows(after),classifiedBefore=classifyRows(beforeRows,afterRows,"before"),classifiedAfter=classifyRows(afterRows,beforeRows,"after"),total=logical.length-1,count=end-start+1,beforePanel=document.querySelector("#before-state").closest(".state-panel"),afterPanel=document.querySelector("#after-state").closest(".state-panel");
   beforePanel.dataset.family=protocolFamily(before.protocol);afterPanel.dataset.family=protocolFamily(after.protocol);
   document.querySelector("#inspector-range-label").textContent=count===1?"SELECTED BOUNDARY":"SELECTED BOUNDARY RANGE";
   document.querySelector("#inspector-title").textContent=path.map((node,i)=>componentPathName(node,start+i,logical)).join(" → ");
   document.querySelector("#boundary-stepper").textContent=count===1?`${String(start+1).padStart(2,"0")} / ${String(total).padStart(2,"0")}`:`${String(start+1).padStart(2,"0")}–${String(end+1).padStart(2,"0")} / ${String(total).padStart(2,"0")}`;
-  document.querySelector("#before-kind").textContent=`${before.kind} · ${PROTOCOL[before.protocol]}`;document.querySelector("#after-kind").textContent=`${after.kind} · ${PROTOCOL[after.protocol]}`;
+  document.querySelector("#before-panel-label").textContent="BEFORE";document.querySelector("#after-panel-label").textContent="AFTER";document.querySelector("#before-kind").textContent=`${before.kind} · ${PROTOCOL[before.protocol]}`;document.querySelector("#after-kind").textContent=`${after.kind} · ${PROTOCOL[after.protocol]}`;
   document.querySelector("#before-state").innerHTML=renderRows(classifiedBefore);document.querySelector("#after-state").innerHTML=renderRows(classifiedAfter);
   activeConnections=connectionPairs(classifiedBefore,classifiedAfter);requestAnimationFrame(()=>requestAnimationFrame(drawFieldConnectors));
   document.querySelector("#transform-verb").textContent=count===1?nodeAction(nodes[0],before):`${count} components in sequence`;
   const explanation=nodes.map((node,i)=>count===1?interpretation(node,states[start+i]):`<strong>${i+1}. ${componentPathName(node,start+i+1,logical)}:</strong> ${interpretation(node,states[start+i])}`).join(" "),evidence=matchedCoverageCase();document.querySelector("#interpretation").innerHTML=`<span>${evidence?`LAB OBSERVATION · ${evidence.id}`:"COMPONENT RULE · OUTSIDE COMPLETE MATRIX"}</span><p>${explanation}</p>`;
+}
+function renderComparisonInspector(){
+  const a=computeFor(model),b=computeFor(compareModel),start=selectedRange.start,end=selectedRange.end,aState=a.states[end+1],bState=b.states[end+1],aRows=stateRows(aState),bRows=stateRows(bState),classifiedA=classifyRows(aRows,bRows,"before"),classifiedB=classifyRows(bRows,aRows,"after"),path=a.logical.slice(start,end+2),total=a.logical.length-1,count=end-start+1,aEvidence=evidenceFor(model),bEvidence=evidenceFor(compareModel),beforePanel=document.querySelector("#before-state").closest(".state-panel"),afterPanel=document.querySelector("#after-state").closest(".state-panel");
+  beforePanel.dataset.family=protocolFamily(aState.protocol);afterPanel.dataset.family=protocolFamily(bState.protocol);
+  document.querySelector("#inspector-range-label").textContent="PIPELINE OUTPUT COMPARISON";
+  document.querySelector("#inspector-title").textContent=`A ↔ B after ${path.map((node,i)=>componentPathName(node,start+i,a.logical)).join(" → ")}`;
+  document.querySelector("#boundary-stepper").textContent=count===1?`${String(start+1).padStart(2,"0")} / ${String(total).padStart(2,"0")}`:`${String(start+1).padStart(2,"0")}–${String(end+1).padStart(2,"0")} / ${String(total).padStart(2,"0")}`;
+  document.querySelector("#before-panel-label").textContent="PIPELINE A";document.querySelector("#after-panel-label").textContent="PIPELINE B";document.querySelector("#before-kind").textContent=`${aState.kind} · ${PROTOCOL[aState.protocol]}`;document.querySelector("#after-kind").textContent=`${bState.kind} · ${PROTOCOL[bState.protocol]}`;
+  document.querySelector("#before-state").innerHTML=renderRows(classifiedA);document.querySelector("#after-state").innerHTML=renderRows(classifiedB);
+  activeConnections=connectionPairs(classifiedA,classifiedB);requestAnimationFrame(()=>requestAnimationFrame(drawFieldConnectors));
+  document.querySelector("#transform-verb").textContent="A / B diff at selected output";
+  const changed=new Set([...classifiedA.filter(row=>row[2]!=="unchanged").map(row=>row[0]),...classifiedB.filter(row=>row[2]!=="unchanged").map(row=>row[0])]).size,summary=changed?`${changed} identity field${changed===1?"":"s"} differ at this output.`:"The identity fields are identical at this output.";
+  document.querySelector("#interpretation").innerHTML=`<span>LAB COMPARISON · A ${aEvidence?.id||"—"} ↔ B ${bEvidence?.id||"—"}</span><p>${summary} Change protocols or configuration inside either pipeline's component cards to isolate the cause.</p>`;
 }
 function renderRows(rows,empty="No identity fields recorded here."){const labels={unchanged:"same",remapped:"remapped",derived:"new",lost:"lost"};return rows.length?rows.map(([k,v,status],index)=>`<div class="state-row diff-${status}" data-row-index="${index}"><span>${k}<em class="change-tag">${labels[status]}</em></span><b>${v??"—"}</b></div>`).join(""):`<div class="empty-state">${empty}</div>`}
 function render(){renderControls();clampSelection();renderWorkbench()}

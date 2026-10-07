@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Play:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261007-16">
+  <link rel="stylesheet" href="styles.css?v=20261007-17">
 </head>
 <body>
   <div class="noise" aria-hidden="true"></div>
@@ -65,10 +65,16 @@
 
         <div class="workbench">
           <div class="workbench-topline">
-            <div><span class="live-dot"></span> BOUNDARY TRACE</div>
-            <div id="coverage-status" class="coverage-status"></div>
+            <div><span class="live-dot"></span> <span id="workbench-title">BOUNDARY TRACE</span></div>
+            <div class="workbench-actions">
+              <div class="workbench-modes" aria-label="Workbench mode">
+                <button type="button" data-workbench-mode="trace" aria-pressed="true">Trace</button>
+                <button type="button" data-workbench-mode="compare" aria-pressed="false">Compare</button>
+              </div>
+              <div id="coverage-status" class="coverage-status"></div>
+            </div>
           </div>
-          <div class="pipeline" id="pipeline" aria-label="Valid telemetry pipeline"></div>
+          <div id="pipeline-host"></div>
           <p class="boundary-selection-help" id="boundary-selection-help"></p>
           <div id="unsupported-banner" class="unsupported-banner" hidden></div>
           <div class="inspector-head">
@@ -87,7 +93,7 @@
           <div class="inspector-grid">
             <svg id="field-connectors" class="field-connectors" aria-hidden="true"></svg>
             <article class="state-panel">
-              <div class="panel-head"><span>BEFORE</span><b id="before-kind">—</b></div>
+              <div class="panel-head"><span id="before-panel-label">BEFORE</span><b id="before-kind">—</b></div>
               <div id="before-state" class="state-body" aria-live="polite"></div>
             </article>
             <div class="transform-column">
@@ -95,7 +101,7 @@
               <span id="transform-verb">choose a boundary</span>
             </div>
             <article class="state-panel after-panel">
-              <div class="panel-head"><span>AFTER</span><b id="after-kind">—</b></div>
+              <div class="panel-head"><span id="after-panel-label">AFTER</span><b id="after-kind">—</b></div>
               <div id="after-state" class="state-body" aria-live="polite"></div>
             </article>
           </div>
@@ -182,6 +188,6 @@
     <p>Observed behavior, specification requirements, implementation choices, and proposed future behavior are different things. This site reports the first.</p>
     <span>Arthur’s Editorial Brain · Lab 01</span>
   </footer>
-  <script src="app.js?v=20261007-16"></script>
+  <script src="app.js?v=20261007-17"></script>
 </body>
 </html>

@@ -23,6 +23,8 @@ Open `http://localhost:4173`.
 
 The workbench uses the Lab's constrained topology: the OTel SDK source and final Prometheus server are fixed, with zero or one optional Collector represented as a receiver/exporter pair. Receivers and Prometheus ingestion modes follow the adjacent protocol automatically; exporters remain switchable. Prometheus-source topologies are crossed with the SDK Prometheus exporter's `UnderscoreEscapingWithSuffixes` and `NoTranslation` strategies, so the source exposes either underscore-form or dotted resource labels in each case, never both. Every valid composition maps to its exact Lab case ID. The complete matrix is linked as reference material instead of being presented as a preset launcher.
 
+Trace mode follows identity through one pipeline and supports a contiguous boundary range. Compare mode clones the current route into Pipeline B, keeps both pipelines structurally aligned, and compares their identity output at the selected boundary. Protocol and configuration controls remain inside the SDK, Collector, or Prometheus component that owns them, so A and B can be varied independently without losing the connection between a setting and its effect.
+
 ## Reproduce the Lab matrix
 
 The full Docker test harness is checked in under [`experiments/complete-36`](experiments/complete-36). The historical directory name is retained so existing links keep working; the harness now executes the expanded 58-case matrix against fresh Prometheus storage, captures every boundary, and regenerates the assertion report, source-strategy comparison, and coverage manifest.

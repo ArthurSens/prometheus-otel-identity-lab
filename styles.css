@@ -71,6 +71,24 @@
 @media(max-width:720px){.pipe-node.composite{min-width:195px}.component-list{grid-template-columns:1fr}}
 @media(min-width:721px) and (max-width:1050px){.pipe-node.composite.fixed-node{min-width:150px;max-width:155px}.pipe-node.composite:not(.fixed-node){min-width:196px;max-width:200px}.pipe-arrow{flex-basis:38px;min-width:38px;width:38px;margin:0 2px}}
 
+/* Side-by-side reasoning without removing controls from their components. */
+.workbench-actions{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap}
+.workbench-modes{display:inline-flex;border:1px solid #cfd5d8;background:#fff;padding:2px}
+.workbench-modes button{border:0;background:transparent;color:#687581;padding:5px 9px;font:500 8px var(--mono);letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
+.workbench-modes button[aria-pressed=true]{background:var(--ink);color:#fff}
+.compare-lanes{display:grid;gap:14px}
+.pipeline-lane{border:1px solid #d5dade;background:#fafaf8}
+.pipeline-lane>header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;border-bottom:1px solid #dfe3e5;background:#fff}
+.pipeline-lane>header b{font:700 11px var(--display);color:var(--ink)}
+.pipeline-lane>header span{font:500 7px var(--mono);letter-spacing:.09em;color:#687581}
+.pipeline-lane-a{border-left:4px solid var(--otel)}
+.pipeline-lane-b{border-left:4px solid var(--prom)}
+.pipeline-lane .pipeline{padding:12px;min-height:0}
+.compare-lanes .pipe-node.composite{min-width:205px;max-width:225px}
+.compare-lanes .pipe-arrow{min-height:82px}
+@media(max-width:1050px){.workbench-actions{align-items:flex-end;flex-direction:column;gap:6px}.compare-lanes .pipeline{overflow-x:auto}.compare-lanes .pipe-node.composite{min-width:195px}}
+@media(max-width:720px){.workbench-topline{align-items:flex-start}.pipeline-lane>header{align-items:flex-start;flex-direction:column}.workbench-actions{align-items:flex-end}.compare-lanes .pipeline{padding:9px}}
+
 /* Matrix reference replaces route presets; the builder stays within Lab scope. */
 .component-button:disabled{cursor:default;color:#7d8790;background:#e8e9e6}.component-button:disabled:before{content:"✓";color:var(--teal)}.matrix-summary{display:grid;gap:7px}.matrix-summary>strong{font:700 36px/1 var(--display);color:var(--blue)}.matrix-summary>span{font:500 9px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:#687581}.matrix-summary p{font-size:11px;color:#687581;margin:4px 0 6px}.matrix-summary dl{display:grid;grid-template-columns:1fr auto;gap:8px;margin:0 0 4px;padding:9px 0;border-block:1px solid #d5d8d5;font:500 9px var(--mono);text-transform:uppercase}.matrix-summary dt{color:#75808b}.matrix-summary dd{margin:0;color:var(--blue)}.matrix-summary a{font-size:10px;color:var(--blue);text-decoration:none}.matrix-summary a:hover{text-decoration:underline}
 
