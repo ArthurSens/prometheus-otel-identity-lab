@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="An evidence-backed interactive experiment tracing identity across Prometheus and OpenTelemetry boundaries.">
+  <title>Identity, boundary by boundary — Prometheus × OpenTelemetry Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Play:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="Prometheus OpenTelemetry Lab home">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>
+      <span><b>Prometheus × OpenTelemetry</b><small>Identity Lab</small></span>
+    </a>
+    <nav aria-label="Primary navigation">
+      <a href="#experiment">Experiment</a>
+      <a href="#findings">Findings</a>
+      <a href="#evidence">Evidence</a>
+    </nav>
+    <span class="scope-chip">Prometheus 3.14.0 · Collector 0.162.0</span>
+  </header>
+
+  <main id="top">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span></span> Prometheus × OpenTelemetry Lab · 01</p>
+        <h1 id="hero-title">Identity is rebuilt<br><em>at every boundary.</em></h1>
+        <p class="dek">Follow one service — <code>payments / checkout / sdk-1</code> — as resource attributes become labels, scrape targets take control, and <code>target_info</code> carries context across the gap.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="#experiment">Open the experiment <span>↓</span></a>
+          <a class="button secondary" href="#evidence">Read the evidence</a>
+        </div>
+      </div>
+      <div class="hero-visual" aria-label="Identity transformation overview">
+        <div class="orbit orbit-a"></div><div class="orbit orbit-b"></div>
+        <article class="identity-card card-otel">
+          <span class="card-kicker">OTel resource</span>
+          <strong>checkout</strong>
+          <code>service.namespace = payments</code>
+          <code>service.instance.id = sdk-1</code>
+        </article>
+        <div class="hero-transform"><span>projection</span><b>→</b></div>
+        <article class="identity-card card-prom">
+          <span class="card-kicker">Prometheus series</span>
+          <strong>requests_total</strong>
+          <code>job = payments/checkout</code>
+          <code>instance = sdk-1</code>
+        </article>
+        <aside class="hero-note"><b>44 / 44</b><span>identity assertions passed</span></aside>
+      </div>
+    </section>
+
+    <section class="thesis-strip" aria-label="Core thesis">
+      <span>THE THESIS</span>
+      <p><code>job</code> and <code>instance</code> are boundary-specific projections — not immutable application fields.</p>
+    </section>
+
+    <section class="experiment-section" id="experiment" aria-labelledby="experiment-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow"><span></span> Interactive evidence explorer</p>
+          <h2 id="experiment-title">Compose a pipeline.<br>Inspect every hand-off.</h2>
+        </div>
+        <p>Choose a tested route or alter the chain. Every supported transition comes from the clean Docker rerun. Untested transitions are clearly flagged.</p>
+      </div>
+
+      <div class="lab-shell">
+        <aside class="control-rail">
+          <div class="control-block">
+            <div class="control-label"><span>01</span><b>Tested routes</b></div>
+            <div class="preset-list" id="preset-list"></div>
+          </div>
+          <div class="control-block">
+            <div class="control-label"><span>02</span><b>Add component</b></div>
+            <div class="component-list" id="component-list"></div>
+          </div>
+          <div class="control-block config-block">
+            <div class="control-label"><span>03</span><b>Configuration</b></div>
+            <div id="config-controls"></div>
+          </div>
+        </aside>
+
+        <div class="workbench">
+          <div class="workbench-topline">
+            <div><span class="live-dot"></span> BOUNDARY TRACE</div>
+            <div id="coverage-status" class="coverage-status"></div>
+          </div>
+          <div class="pipeline" id="pipeline" aria-label="Pipeline components"></div>
+          <div id="unsupported-banner" class="unsupported-banner" hidden></div>
+          <div class="inspector-head">
+            <div>
+              <span>SELECTED BOUNDARY</span>
+              <h3 id="inspector-title">Select a boundary</h3>
+            </div>
+            <div class="boundary-stepper" id="boundary-stepper"></div>
+          </div>
+          <div class="inspector-grid">
+            <article class="state-panel">
+              <div class="panel-head"><span>BEFORE</span><b id="before-kind">—</b></div>
+              <div id="before-state" class="state-body"></div>
+            </article>
+            <div class="transform-column">
+              <div class="transform-glyph">→</div>
+              <span id="transform-verb">choose a boundary</span>
+            </div>
+            <article class="state-panel after-panel">
+              <div class="panel-head"><span>AFTER</span><b id="after-kind">—</b></div>
+              <div id="after-state" class="state-body"></div>
+            </article>
+          </div>
+          <article class="interpretation" id="interpretation">
+            <span>WHY IT CHANGED</span>
+            <p>Select an arrow between components to inspect the observed identity transformation.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="findings" id="findings" aria-labelledby="findings-title">
+      <div class="section-heading compact">
+        <div>
+          <p class="eyebrow"><span></span> What the experiment supports</p>
+          <h2 id="findings-title">Four rules. One caveat.</h2>
+        </div>
+      </div>
+      <div class="rule-grid">
+        <article class="rule feature-rule">
+          <span class="rule-no">01</span>
+          <div class="mini-map"><i>OTel</i><b>→</b><i>Prom</i></div>
+          <h3>Exporters derive identity</h3>
+          <p>For this fixture, <code>service.namespace + service.name</code> became <code>job</code>; <code>service.instance.id</code> became <code>instance</code>.</p>
+        </article>
+        <article class="rule">
+          <span class="rule-no">02</span>
+          <h3>Receivers reconstruct identity</h3>
+          <p>Prometheus <code>job</code> and <code>instance</code> became the primary OTel resource identity. A round trip was not an inverse mapping.</p>
+        </article>
+        <article class="rule">
+          <span class="rule-no">03</span>
+          <h3><code>target_info</code> is the bridge</h3>
+          <p>Prometheus-to-OTel consumed it into resource attributes. OTel-to-Prometheus created it to retain resource context.</p>
+        </article>
+        <article class="rule caution-rule">
+          <span class="rule-no">04</span>
+          <h3>Scrape policy can rewrite the result</h3>
+          <p>An exporter may derive the expected identity, then <code>honor_labels=false</code> replaces it with scrape-target identity and preserves the original as <code>exported_*</code>.</p>
+        </article>
+        <article class="rule caveat-rule">
+          <span class="rule-no">!</span>
+          <h3>Scope is a feature, not a footnote</h3>
+          <p>This experiment does not make claims about metric names, types, scope data, histograms, timestamps, temporality, exemplars, or HELP/TYPE/UNIT.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="evidence" id="evidence" aria-labelledby="evidence-title">
+      <div class="evidence-copy">
+        <p class="eyebrow light"><span></span> Evidence, not animation</p>
+        <h2 id="evidence-title">Every visible change maps back to a captured boundary.</h2>
+        <p>The rerun preserved exposition pages, structured Collector checkpoints, debug logs, Prometheus API responses, environment metadata, hashes, and named assertion results.</p>
+        <div class="source-links">
+          <a href="https://docs.google.com/document/d/1LKj4Ey2WGNCW45PQFE5W3CgSUuXRlzq7vxcib6llpHU" target="_blank" rel="noreferrer">Lab report <span>↗</span></a>
+          <a href="https://drive.google.com/file/d/1Tk_u0ocZVLu19xnzVMficZgkohsjwzFF/view" target="_blank" rel="noreferrer">Canonical Markdown <span>↗</span></a>
+          <a href="https://drive.google.com/file/d/1U4NV0Z7ahvBDOufBusfHNNamdrl8By8X/view" target="_blank" rel="noreferrer">Evidence archive <span>↗</span></a>
+        </div>
+      </div>
+      <div class="evidence-ledger">
+        <div class="ledger-head"><span>CAPTURE</span><span>PROVES</span></div>
+        <div><code>exposition/*.txt</code><p>Exact exporter page before a scrape</p></div>
+        <div><code>identity-checkpoints/*.jsonl</code><p>Resource and datapoint identity inside Collectors</p></div>
+        <div><code>api/*/identity/*.json</code><p>What Prometheus actually stored</p></div>
+        <div><code>assertions.txt</code><p>44 named checks from the clean rerun</p></div>
+        <div><code>SHA256SUMS</code><p>Integrity of the evidence set</p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="brand footer-brand"><span class="brand-mark"><i></i><i></i></span><span><b>Prometheus × OpenTelemetry</b><small>Identity Lab</small></span></div>
+    <p>Observed behavior, specification requirements, implementation choices, and proposed future behavior are different things. This site reports the first.</p>
+    <span>Arthur’s Editorial Brain · Lab 01</span>
+  </footer>
+  <script src="app.js"></script>
+</body>
+</html>
