@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Play:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261007-15">
+  <link rel="stylesheet" href="styles.css?v=20261007-16">
 </head>
 <body>
   <div class="noise" aria-hidden="true"></div>
@@ -41,14 +41,21 @@
           <p class="eyebrow"><span></span> Boundary workbench</p>
           <h2 id="experiment-title">Inspect the transformation, one boundary at a time.</h2>
         </div>
-        <p>Choose a route or alter the chain. Every zero-or-one-Collector configuration maps to a clean Lab case; relay and multi-Collector graphs remain outside the complete matrix.</p>
+        <p>Build a route from the fixed SDK source to the fixed Prometheus destination. The workbench maps every valid zero-or-one-Collector configuration to its exact Lab case.</p>
       </div>
 
       <div class="lab-shell">
         <aside class="control-rail">
           <div class="control-block">
-            <div class="control-label"><span>01</span><b>Tested routes</b></div>
-            <div class="preset-list" id="preset-list"></div>
+            <div class="control-label"><span>01</span><b>Coverage matrix</b></div>
+            <div class="matrix-summary">
+              <strong>58</strong>
+              <span>tested configurations</span>
+              <p>The pipeline you build is matched to one exact Lab tuple.</p>
+              <dl><dt>Current match</dt><dd id="matrix-current-case">—</dd></dl>
+              <a href="https://github.com/ArthurSens/prometheus-otel-identity-lab/blob/main/experiments/complete-36/cases.json" target="_blank" rel="noreferrer">Browse case definitions <span>↗</span></a>
+              <a href="https://docs.google.com/document/d/1NcVE-wGccI8HcNW2TFuiN3mBDNtKw5h6-Kw7gb7rRGk/edit" target="_blank" rel="noreferrer">Read the complete matrix <span>↗</span></a>
+            </div>
           </div>
           <div class="control-block">
             <div class="control-label"><span>02</span><b>Pipeline structure</b></div>
@@ -175,6 +182,6 @@
     <p>Observed behavior, specification requirements, implementation choices, and proposed future behavior are different things. This site reports the first.</p>
     <span>Arthur’s Editorial Brain · Lab 01</span>
   </footer>
-  <script src="app.js?v=20261007-15"></script>
+  <script src="app.js?v=20261007-16"></script>
 </body>
 </html>

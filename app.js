@@ -4,19 +4,7 @@ const TRANSLATION_OPTIONS=[
   ["NoTranslation","NoTranslation"]
 ];
 const collector=(exporter,settings={})=>({type:"collector",exporter,honorLabels:false,translationStrategy:DEFAULT_TRANSLATION,...settings});
-const relay=(settings={})=>({type:"promRelay",honorLabels:true,keepIdentifying:false,translationStrategy:DEFAULT_TRANSLATION,...settings});
 const destination=settings=>({honorLabels:true,keepIdentifying:false,translationStrategy:DEFAULT_TRANSLATION,...settings});
-
-const PRESETS=[
-  {id:"p1",label:"01 · direct SDK scrape",source:"prom",stages:[],final:destination({honorLabels:false})},
-  {id:"p3",label:"03 · Prom receiver round trip",source:"prom",stages:[collector("prom")],final:destination({honorLabels:true})},
-  {id:"p4",label:"04 · OTLP → Prom exporter",source:"otlp",stages:[collector("prom")],final:destination({honorLabels:true})},
-  {id:"p5",label:"05 · pull → RW2",source:"otlp",stages:[collector("prom"),relay({honorLabels:true})],final:destination()},
-  {id:"p6",label:"06 · direct Collector RW2",source:"otlp",stages:[collector("rw2")],final:destination()},
-  {id:"p8",label:"08 · honor_labels control",source:"prom",stages:[],final:destination({honorLabels:false})},
-  {id:"p9",label:"09 · translation strategies",source:"otlp",stages:[collector("prom")],final:destination({honorLabels:false})},
-  {id:"p10",label:"10 · native OTLP",source:"otlp",stages:[collector("otlp")],final:destination({keepIdentifying:false})}
-];
 const PROTOCOL={otlp:"OTLP",prom:"Prometheus exposition",rw2:"Remote Write 2.0",storage:"stored series"};
 const EXPORTER={otlp:"OTLP exporter",prom:"Prometheus exporter",rw2:"Remote Write 2.0 exporter"};
 const INGEST={otlp:"native OTLP receiver",prom:"scrape",rw2:"Remote Write 2.0 receiver"};
@@ -24,8 +12,7 @@ const RECEIVER={otlp:"OTLP receiver",prom:"Prometheus receiver",rw2:"Remote Writ
 
 // Exact route tuples from the Lab's original 36-case coverage manifest. The
 // Lab's 22 dotted-source twins are derived below from their recorded pairs.
-// Intermediate
-// Prometheus relays and routes with more than one Collector remain out of scope.
+// Routes with more than one Collector remain out of scope.
 const BASE_COVERAGE_CASES=[
   {id:"E01",source:"prom",collector:false,final:"scrape",final_honor:false},
   {id:"E02",source:"prom",collector:false,final:"scrape",final_honor:true},
@@ -69,12 +56,10 @@ const UNDERSCORE_CASES=BASE_COVERAGE_CASES.map(item=>item.source==="prom"?{...it
 const COVERAGE_CASES=[...UNDERSCORE_CASES,...Object.entries(DOTTED_SOURCE_PAIRS).map(([sourceCase,id])=>({...UNDERSCORE_CASES.find(item=>item.id===sourceCase),id,source_strategy:"NoTranslation",source_case:sourceCase}))];
 
 let model={source:"otlp",sourceStrategy:DEFAULT_TRANSLATION,stages:[collector("prom")],final:destination({honorLabels:true})};
-let activePreset="p4",selectedRange={start:0,end:0};
+let selectedRange={start:0,end:0};
 let activeConnections=[];
 const clone=value=>JSON.parse(JSON.stringify(value));
-function selectPreset(id){const p=PRESETS.find(x=>x.id===id);model={source:p.source,sourceStrategy:p.sourceStrategy||DEFAULT_TRANSLATION,stages:clone(p.stages),final:clone(p.final)};activePreset=id;selectedRange={start:0,end:0};render()}
-function markCustom(){activePreset="custom"}
-function outputOfStage(stage){return stage.type==="collector"?stage.exporter:"rw2"}
+function outputOfStage(stage){return stage.exporter}
 function inputProtocolAt(stageIndex){let p=model.source;for(let i=0;i<stageIndex;i++)p=outputOfStage(model.stages[i]);return p}
 function finalInputProtocol(){return model.stages.length?outputOfStage(model.stages.at(-1)):model.source}
 function strategyKey(v){return v.startsWith("Underscore")?"underscore":v.startsWith("NoUTF8")?"utf8-suffixes":"no-translation"}
@@ -126,7 +111,6 @@ function applyCollector(input,stage){
 function activeExporterTranslation(){for(let i=model.stages.length-1;i>=0;i--){const stage=model.stages[i];if(stage.type==="collector"&&["prom","rw2"].includes(stage.exporter))return stage.translationStrategy}return DEFAULT_TRANSLATION}
 function scrapeTarget(context){
   if(matchedCoverageCase())return {job:`case-${caseSlug()}-final`,instance:model.stages.length?"c36-collector:9464":"c36-sdk:9464"};
-  if(context==="relay"&&activePreset==="p5")return {job:"path5-origin",instance:"collector:port"};
   return {job:"configured job_name",instance:"configured scrape target"};
 }
 function scrapeLabels(labels,server,context){
@@ -154,7 +138,7 @@ function ingestPrometheus(input,server,context,isFinal){
 }
 function compute(){
   const logical=[{type:"source"},...model.stages,{type:"final",...model.final}],states=[initialState()];let state=states[0];
-  model.stages.forEach(stage=>{state=stage.type==="collector"?applyCollector(state,stage):ingestPrometheus(state,stage,"relay",false);states.push(state)});
+  model.stages.forEach(stage=>{state=applyCollector(state,stage);states.push(state)});
   state=ingestPrometheus(state,model.final,"final",true);states.push(state);return {logical,states};
 }
 function stateRows(state){
@@ -209,7 +193,7 @@ function drawFieldConnectors(){
   svg.innerHTML=`<defs><marker id="arrow-unchanged" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#69737a"/></marker><marker id="arrow-remapped" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#9a7200"/></marker></defs>${paths}`;
   grid.classList.toggle("has-field-links",Boolean(paths));
 }
-function nodeAction(node,input){if(node.type==="collector")return `${RECEIVER[input.protocol]} → ${EXPORTER[node.exporter]}`;if(node.type==="promRelay")return `${INGEST[input.protocol]} → Remote Write 2.0`;return `${INGEST[input.protocol]} → storage`}
+function nodeAction(node,input){if(node.type==="collector")return `${RECEIVER[input.protocol]} → ${EXPORTER[node.exporter]}`;return `${INGEST[input.protocol]} → storage`}
 function interpretation(node,input){
   if(node.type==="collector"){const receive=input.protocol==="otlp"?"The OTLP receiver preserves structured resource identity.":`The ${RECEIVER[input.protocol]} uses its scrape identity, then reconstructs primary resource identity from job and instance and consumes target_info into resource attributes.`;const send=node.exporter==="otlp"?"The OTLP exporter keeps the resulting resource structured.":`The ${EXPORTER[node.exporter]} projects the resulting resource into job, instance, and target_info using its translation strategy.`;return `${receive} ${send}`}
   if(input.protocol==="prom")return node.honorLabels?"This server's scrape honors incoming job and instance when they exist; otherwise it assigns configured target identity.":"This server's scrape target wins job and instance collisions; incoming values survive as exported_job and exported_instance.";
@@ -218,11 +202,9 @@ function interpretation(node,input){
 }
 
 function renderControls(){
-  document.querySelector("#preset-list").innerHTML=PRESETS.map(p=>`<button class="preset-button ${activePreset===p.id?"active":""}" data-preset="${p.id}">${p.label}<small>${p.stages.length+2} roles</small></button>`).join("");
-  document.querySelector("#component-list").innerHTML=`<button class="component-button" data-add="collector">Add Collector</button><button class="component-button" data-add="promRelay">Add Prometheus relay</button><p class="control-help">Stages are inserted before the fixed final Prometheus server. Each component exposes only the configuration it actually owns.</p>`;
-  document.querySelectorAll("[data-preset]").forEach(b=>b.onclick=()=>selectPreset(b.dataset.preset));
-  document.querySelector('[data-add="collector"]').onclick=()=>{model.stages.push(collector("otlp"));markCustom();selectedRange={start:model.stages.length-1,end:model.stages.length-1};render()};
-  document.querySelector('[data-add="promRelay"]').onclick=()=>{model.stages.push(relay());markCustom();selectedRange={start:model.stages.length-1,end:model.stages.length-1};render()};
+  const hasCollector=Boolean(model.stages.length);
+  document.querySelector("#component-list").innerHTML=`<button class="component-button" data-add="collector" ${hasCollector?"disabled":""}>${hasCollector?"Collector already added":"Add Collector"}</button><p class="control-help">The experiment covers a direct SDK route or one Collector before the fixed final Prometheus server.</p>`;
+  const add=document.querySelector('[data-add="collector"]');if(add&&!hasCollector)add.onclick=()=>{model.stages.push(collector("otlp"));selectedRange={start:0,end:0};render()};
 }
 function settingToggle(owner,index,key,label,value,scope){return `<div class="node-setting"><span><b>${label}</b><small>${scope}</small></span><label class="switch" aria-label="Toggle ${label}"><input type="checkbox" data-setting-owner="${owner}" data-setting-index="${index}" data-setting-key="${key}" ${value?"checked":""}><i></i></label></div>`}
 function translationControl(owner,index,value,scope){return `<label class="translation-setting"><span><b>translation_strategy</b><small>${scope}</small></span><select data-setting-owner="${owner}" data-setting-index="${index}" data-setting-key="translationStrategy">${TRANSLATION_OPTIONS.map(([v,label])=>`<option value="${v}" ${value===v?"selected":""}>${label}</option>`).join("")}</select></label>`}
@@ -230,25 +212,25 @@ function componentSettings(component,input,owner,index){
   const controls=[];
   if(input==="prom")controls.push(settingToggle(owner,index,"honorLabels","honor_labels",component.honorLabels,"receiver scrape"));
   if(owner==="stage"&&component.type==="collector"&&["prom","rw2"].includes(component.exporter))controls.push(translationControl(owner,index,component.translationStrategy,`${EXPORTER[component.exporter]} translation`));
-  if((component.type==="promRelay"||owner==="final")&&input==="otlp"){controls.push(settingToggle(owner,index,"keepIdentifying","keep identifying attrs",component.keepIdentifying,"native OTLP receiver"));controls.push(translationControl(owner,index,component.translationStrategy,"native OTLP receiver"))}
+  if(owner==="final"&&input==="otlp"){controls.push(settingToggle(owner,index,"keepIdentifying","keep identifying attrs",component.keepIdentifying,"native OTLP receiver"));controls.push(translationControl(owner,index,component.translationStrategy,"native OTLP receiver"))}
   return controls.length?`<div class="node-settings"><span class="settings-title">Component configuration</span>${controls.join("")}</div>`:"";
 }
 function sourceNode(){const strategy=model.source==="prom"?`<div class="node-settings"><span class="settings-title">Component configuration</span>${translationControl("source",0,model.sourceStrategy,"Prometheus exporter source labels")}</div>`:"";return `<div class="pipe-node composite fixed-node" data-family="otel"><span class="node-kind">Fixed source</span><b>OpenTelemetry SDK</b><label>output<select data-source-output><option value="otlp" ${model.source==="otlp"?"selected":""}>OTLP exporter</option><option value="prom" ${model.source==="prom"?"selected":""}>Prometheus exporter</option></select></label>${strategy}<small>Semantic resource: payments / checkout / sdk-1</small></div>`}
-function stageNode(stage,i){const input=inputProtocolAt(i);if(stage.type==="collector")return `<div class="pipe-node composite" data-family="otel"><span class="node-kind">Collector ${i+1}</span><b>OpenTelemetry Collector</b><label>receiver<input value="${RECEIVER[input]}" disabled></label><label>exporter<select data-exporter="${i}"><option value="otlp" ${stage.exporter==="otlp"?"selected":""}>OTLP exporter</option><option value="prom" ${stage.exporter==="prom"?"selected":""}>Prometheus exporter</option><option value="rw2" ${stage.exporter==="rw2"?"selected":""}>RW 2.0 exporter</option></select></label>${componentSettings(stage,input,"stage",i)}${stageButtons(i)}</div>`;return `<div class="pipe-node composite" data-family="prom"><span class="node-kind">Intermediate server</span><b>Prometheus relay</b><label>ingestion<input value="${INGEST[input]}" disabled></label><label>output<input value="Remote Write 2.0" disabled></label>${componentSettings(stage,input,"stage",i)}${stageButtons(i)}</div>`}
+function stageNode(stage,i){const input=inputProtocolAt(i);return `<div class="pipe-node composite" data-family="otel"><span class="node-kind">Collector ${i+1}</span><b>OpenTelemetry Collector</b><label>receiver<input value="${RECEIVER[input]}" disabled></label><label>exporter<select data-exporter="${i}"><option value="otlp" ${stage.exporter==="otlp"?"selected":""}>OTLP exporter</option><option value="prom" ${stage.exporter==="prom"?"selected":""}>Prometheus exporter</option><option value="rw2" ${stage.exporter==="rw2"?"selected":""}>RW 2.0 exporter</option></select></label>${componentSettings(stage,input,"stage",i)}${stageButtons(i)}</div>`}
 function stageButtons(i){return `<div class="stage-actions"><button data-move-left="${i}" ${i===0?"disabled":""} aria-label="Move stage left">←</button><button data-move-right="${i}" ${i===model.stages.length-1?"disabled":""} aria-label="Move stage right">→</button><button data-remove-stage="${i}" aria-label="Remove stage">Remove</button></div>`}
 function finalNode(){const input=finalInputProtocol();return `<div class="pipe-node composite fixed-node" data-family="prom"><span class="node-kind">Fixed destination</span><b>Prometheus server</b><label>ingestion<input value="${INGEST[input]}" disabled></label>${componentSettings(model.final,input,"final",0)}<small>Final queryable storage · cannot be removed</small></div>`}
-function componentFamily(node){return node?.type==="promRelay"||node?.type==="final"?"prom":"otel"}
+function componentFamily(node){return node?.type==="final"?"prom":"otel"}
 function protocolFamily(protocol){return protocol==="otlp"?"otel":"prom"}
 function renderWorkbench(){
   const parts=[sourceNode()];model.stages.forEach((s,i)=>{const active=i>=selectedRange.start&&i<=selectedRange.end,fromFamily=i===0?"otel":componentFamily(model.stages[i-1]),toFamily=componentFamily(s);parts.push(`<button class="pipe-arrow ${active?"active":""}" data-boundary="${i}" data-from-family="${fromFamily}" data-to-family="${toFamily}" aria-pressed="${active}" aria-label="Select boundary ${i+1}"><span></span></button>`);parts.push(stageNode(s,i))});const finalBoundary=model.stages.length,finalActive=finalBoundary>=selectedRange.start&&finalBoundary<=selectedRange.end,finalFrom=model.stages.length?componentFamily(model.stages.at(-1)):"otel";parts.push(`<button class="pipe-arrow ${finalActive?"active":""}" data-boundary="${finalBoundary}" data-from-family="${finalFrom}" data-to-family="prom" aria-pressed="${finalActive}" aria-label="Select final boundary"><span></span></button>`);parts.push(finalNode());document.querySelector("#pipeline").innerHTML=parts.join("");
-  document.querySelector("[data-source-output]").onchange=e=>{model.source=e.target.value;markCustom();render()};
-  document.querySelectorAll("[data-exporter]").forEach(el=>el.onchange=e=>{model.stages[+e.target.dataset.exporter].exporter=e.target.value;markCustom();render()});
+  document.querySelector("[data-source-output]").onchange=e=>{model.source=e.target.value;render()};
+  document.querySelectorAll("[data-exporter]").forEach(el=>el.onchange=e=>{model.stages[+e.target.dataset.exporter].exporter=e.target.value;render()});
   document.querySelectorAll("[data-setting-key]").forEach(el=>el.onchange=e=>updateSetting(e.target));
   document.querySelectorAll("[data-boundary]").forEach(b=>b.onclick=()=>selectBoundary(+b.dataset.boundary));
-  document.querySelectorAll("[data-remove-stage]").forEach(b=>b.onclick=()=>{model.stages.splice(+b.dataset.removeStage,1);markCustom();clampSelection();render()});
+  document.querySelectorAll("[data-remove-stage]").forEach(b=>b.onclick=()=>{model.stages.splice(+b.dataset.removeStage,1);clampSelection();render()});
   document.querySelectorAll("[data-move-left]").forEach(b=>b.onclick=()=>moveStage(+b.dataset.moveLeft,-1));document.querySelectorAll("[data-move-right]").forEach(b=>b.onclick=()=>moveStage(+b.dataset.moveRight,1));
   const selectedCount=selectedRange.end-selectedRange.start+1;document.querySelector("#boundary-selection-help").textContent=selectedCount===1?"One boundary selected. Click another arrow to extend the comparison across every component between them.":`${selectedCount} consecutive boundaries selected. Click a selected arrow to start a new range.`;
-  const evidence=matchedCoverageCase(),paired=pairedCoverageCase(evidence),status=document.querySelector("#coverage-status");status.textContent=evidence?`LAB TESTED · ${evidence.id}${paired?` · PAIRED WITH ${paired.id}`:""}`:"OUTSIDE 58-CASE LAB SCOPE";status.style.background=evidence?"#e7f5f2":"#fff6dc";status.style.color=evidence?"#087368":"#775d00";const banner=document.querySelector("#unsupported-banner");banner.hidden=Boolean(evidence);banner.textContent="This graph is outside the Lab's complete zero-or-one-Collector matrix. The inspector applies component-level rules, but this full composition was not run end-to-end.";renderInspector();
+  const evidence=matchedCoverageCase(),paired=pairedCoverageCase(evidence),status=document.querySelector("#coverage-status"),matrixCase=document.querySelector("#matrix-current-case");status.textContent=evidence?`LAB TESTED · ${evidence.id}${paired?` · PAIRED WITH ${paired.id}`:""}`:"NO EXACT MATRIX MATCH";status.style.background=evidence?"#e7f5f2":"#fff6dc";status.style.color=evidence?"#087368":"#775d00";if(matrixCase)matrixCase.textContent=evidence?`${evidence.id}${paired?` ↔ ${paired.id}`:""}`:"—";const banner=document.querySelector("#unsupported-banner");banner.hidden=Boolean(evidence);banner.textContent="This combination does not match an exact Lab tuple.";renderInspector();
 }
 function selectBoundary(index){
   const {start,end}=selectedRange;
@@ -261,11 +243,11 @@ function clampSelection(){const max=model.stages.length;selectedRange.start=Math
 function updateSetting(el){
   if(el.dataset.settingOwner==="source")model.sourceStrategy=el.value;
   else{const target=el.dataset.settingOwner==="final"?model.final:model.stages[+el.dataset.settingIndex];target[el.dataset.settingKey]=el.type==="checkbox"?el.checked:el.value}
-  markCustom();renderWorkbench();
+  renderWorkbench();
 }
-function moveStage(i,delta){const j=i+delta;if(j<0||j>=model.stages.length)return;[model.stages[i],model.stages[j]]=[model.stages[j],model.stages[i]];markCustom();render()}
-function componentName(node){return node.type==="source"?"OTel SDK":node.type==="collector"?"Collector":node.type==="promRelay"?"Prometheus relay":"Prometheus server"}
-function componentPathName(node,index,logical){if(node.type==="collector"){const total=logical.filter(item=>item.type==="collector").length,ordinal=logical.slice(0,index+1).filter(item=>item.type==="collector").length;return total>1?`Collector ${ordinal}`:"Collector"}if(node.type==="promRelay"){const total=logical.filter(item=>item.type==="promRelay").length,ordinal=logical.slice(0,index+1).filter(item=>item.type==="promRelay").length;return total>1?`Prometheus relay ${ordinal}`:"Prometheus relay"}return componentName(node)}
+function moveStage(i,delta){const j=i+delta;if(j<0||j>=model.stages.length)return;[model.stages[i],model.stages[j]]=[model.stages[j],model.stages[i]];render()}
+function componentName(node){return node.type==="source"?"OTel SDK":node.type==="collector"?"Collector":"Prometheus server"}
+function componentPathName(node,index,logical){if(node.type==="collector"){const total=logical.filter(item=>item.type==="collector").length,ordinal=logical.slice(0,index+1).filter(item=>item.type==="collector").length;return total>1?`Collector ${ordinal}`:"Collector"}return componentName(node)}
 function renderInspector(){
   const {logical,states}=compute(),start=selectedRange.start,end=selectedRange.end,before=states[start],after=states[end+1],nodes=logical.slice(start+1,end+2),path=logical.slice(start,end+2),beforeRows=stateRows(before),afterRows=stateRows(after),classifiedBefore=classifyRows(beforeRows,afterRows,"before"),classifiedAfter=classifyRows(afterRows,beforeRows,"after"),total=logical.length-1,count=end-start+1,beforePanel=document.querySelector("#before-state").closest(".state-panel"),afterPanel=document.querySelector("#after-state").closest(".state-panel");
   beforePanel.dataset.family=protocolFamily(before.protocol);afterPanel.dataset.family=protocolFamily(after.protocol);

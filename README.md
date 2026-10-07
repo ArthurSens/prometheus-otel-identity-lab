@@ -21,7 +21,7 @@ Open `http://localhost:4173`.
 - Included: `job`, `instance`, OTel resource identity, and `target_info`
 - Excluded: metric names/types, scope data, histograms, timestamps, temporality, exemplars, and HELP/TYPE/UNIT
 
-The workbench uses a constrained topology: the OTel SDK source and final Prometheus server are fixed, optional stages are inserted between them, and each Collector is represented as a receiver/exporter pair. Receivers and Prometheus ingestion modes follow the adjacent protocol automatically; exporters remain switchable. Prometheus-source topologies are now crossed with the SDK Prometheus exporter's `UnderscoreEscapingWithSuffixes` and `NoTranslation` strategies, so the source exposes either underscore-form or dotted resource labels in each case, never both. Every configuration with zero or one Collector maps to its exact Lab case ID. Intermediate Prometheus relays and multi-Collector graphs remain outside the complete matrix and are labeled accordingly.
+The workbench uses the Lab's constrained topology: the OTel SDK source and final Prometheus server are fixed, with zero or one optional Collector represented as a receiver/exporter pair. Receivers and Prometheus ingestion modes follow the adjacent protocol automatically; exporters remain switchable. Prometheus-source topologies are crossed with the SDK Prometheus exporter's `UnderscoreEscapingWithSuffixes` and `NoTranslation` strategies, so the source exposes either underscore-form or dotted resource labels in each case, never both. Every valid composition maps to its exact Lab case ID. The complete matrix is linked as reference material instead of being presented as a preset launcher.
 
 ## Reproduce the Lab matrix
 
