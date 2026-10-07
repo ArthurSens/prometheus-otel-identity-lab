@@ -33,16 +33,6 @@
         <p class="dek">This is an interactive reading of one controlled experiment. It follows the same service identity — <code>payments / checkout / sdk-1</code> — through exposition, scrape, Collector receivers and exporters, OTLP, Remote Write 2.0, and Prometheus storage.</p>
         <p class="hero-method">Use the workbench below to compare observed boundaries. If a component transition was not exercised by the experiment, the interface marks it as unknown instead of predicting a result.</p>
       </div>
-      <aside class="study-card" aria-label="Experiment frame">
-        <div class="study-card-head"><span>EXPERIMENT FRAME</span><b>clean Docker rerun</b></div>
-        <dl>
-          <div><dt>Question</dt><dd>Which identity exists at each observable boundary, and which component changes it?</dd></div>
-          <div><dt>Fixture</dt><dd><code>service.namespace=payments</code><br><code>service.name=checkout</code><br><code>service.instance.id=sdk-1</code></dd></div>
-          <div><dt>Versions</dt><dd>Prometheus 3.14.0<br>Collector Contrib 0.162.0</dd></div>
-          <div><dt>Checks</dt><dd><strong>44 / 44 passed</strong></dd></div>
-          <div><dt>In scope</dt><dd><code>job</code>, <code>instance</code>, resource identity, <code>target_info</code></dd></div>
-        </dl>
-      </aside>
     </section>
 
     <section class="thesis-strip" aria-label="Core thesis">

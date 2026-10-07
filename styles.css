@@ -6,7 +6,8 @@
 
 /* Technical-note presentation: quiet hierarchy, evidence first. */
 .site-header{height:70px;background:rgba(246,244,239,.96)}
-.hero{min-height:0;padding:76px clamp(22px,6vw,100px) 68px;grid-template-columns:minmax(0,1.25fr) minmax(360px,.75fr);gap:clamp(48px,7vw,110px);align-items:start}
+.hero{min-height:0;padding:76px clamp(22px,6vw,100px) 68px;display:block}
+.hero-copy{max-width:980px}
 .hero h1{font-size:clamp(42px,5vw,70px);line-height:1.05;max-width:900px;margin-bottom:28px}
 .dek{font-size:17px;max-width:790px}
 .hero-method{max-width:760px;margin:24px 0 0;padding-left:16px;border-left:2px solid var(--teal);color:#5d6873;font-size:13px}
