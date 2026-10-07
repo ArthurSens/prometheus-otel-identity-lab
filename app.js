@@ -84,7 +84,6 @@ function currentCoverageTuple(){
 function sameTuple(a,b){const keys=new Set([...Object.keys(a||{}),...Object.keys(b||{})]);keys.delete("id");keys.delete("source_case");return [...keys].every(key=>a?.[key]===b?.[key])}
 function matchedCoverageCase(){const tuple=currentCoverageTuple();return tuple?COVERAGE_CASES.find(item=>sameTuple(item,tuple))||null:null}
 function pairedCoverageCase(evidence=matchedCoverageCase()){if(!evidence||evidence.source!=="prom")return null;const pairedId=evidence.source_case||DOTTED_SOURCE_PAIRS[evidence.id];return pairedId?COVERAGE_CASES.find(item=>item.id===pairedId)||null:null}
-function caseSlug(){return matchedCoverageCase()?.id.toLowerCase()||"configured"}
 function translatedKey(key,strategy){return strategy==="NoTranslation"?key:key.replaceAll(".","_")}
 function putLabel(target,key,value,prepend=false){if(value==null)return;if(target[key]&&target[key]!==value)target[key]=prepend?`${value};${target[key]}`:`${target[key]};${value}`;else target[key]=value}
 
@@ -95,7 +94,7 @@ function initialState(){
 }
 function receiverIdentity(input,stage){
   if(stage.honorLabels&&input.labels?.job)return {job:input.labels.job,instance:input.labels.instance};
-  if(matchedCoverageCase())return {job:`case-${caseSlug()}-receiver`,instance:"c36-sdk:9464"};
+  if(matchedCoverageCase())return {job:"identity-lab-source",instance:"c36-sdk:9464"};
   return {job:"configured receiver job_name",instance:"configured scrape target"};
 }
 function receiveResource(input,stage){
@@ -117,7 +116,7 @@ function applyCollector(input,stage){
 }
 function activeExporterTranslation(){for(let i=model.stages.length-1;i>=0;i--){const stage=model.stages[i];if(stage.type==="collector"&&["prom","rw2"].includes(stage.exporter))return stage.translationStrategy}return DEFAULT_TRANSLATION}
 function scrapeTarget(context){
-  if(matchedCoverageCase())return {job:`case-${caseSlug()}-final`,instance:model.stages.length?"c36-collector:9464":"c36-sdk:9464"};
+  if(matchedCoverageCase())return {job:"identity-lab-final",instance:model.stages.length?"c36-collector:9464":"c36-sdk:9464"};
   return {job:"configured job_name",instance:"configured scrape target"};
 }
 function scrapeLabels(labels,server,context){
