@@ -19,7 +19,6 @@
     </a>
     <nav aria-label="Primary navigation">
       <a href="#experiment">Experiment</a>
-      <a href="#findings">Findings</a>
       <a href="#evidence">Evidence</a>
     </nav>
     <span class="scope-chip">Experiment scope · Prometheus 3.14.0 · Collector 0.162.0</span>
@@ -110,53 +109,6 @@
             <p>Select an arrow between components to inspect the observed identity transformation.</p>
           </article>
         </div>
-      </div>
-    </section>
-
-    <section class="findings" id="findings" aria-labelledby="findings-title">
-      <div class="section-heading compact">
-        <div>
-          <p class="eyebrow"><span></span> What the experiment supports</p>
-          <h2 id="findings-title">Observed transformation rules</h2>
-        </div>
-      </div>
-      <div class="rule-grid">
-        <article class="rule feature-rule">
-          <span class="rule-no">01</span>
-          <div class="mini-map"><i>OTel</i><b>→</b><i>Prom</i></div>
-          <h3>Exporters derive identity</h3>
-          <p>For this fixture, <code>service.namespace + service.name</code> became <code>job</code>; <code>service.instance.id</code> became <code>instance</code>.</p>
-        </article>
-        <article class="rule">
-          <span class="rule-no">02</span>
-          <h3>Receivers reconstruct identity</h3>
-          <p>Prometheus <code>job</code> and <code>instance</code> became the primary OTel resource identity. A round trip was not an inverse mapping.</p>
-        </article>
-        <article class="rule">
-          <span class="rule-no">03</span>
-          <h3><code>target_info</code> is the bridge</h3>
-          <p>Prometheus-to-OTel consumed it into resource attributes. OTel-to-Prometheus created it to retain resource context.</p>
-        </article>
-        <article class="rule caution-rule">
-          <span class="rule-no">04</span>
-          <h3>Scrape policy can rewrite the result</h3>
-          <p>An exporter may derive the expected identity, then <code>honor_labels=false</code> replaces it with scrape-target identity and preserves the original as <code>exported_*</code>.</p>
-        </article>
-        <article class="rule caution-rule">
-          <span class="rule-no">05</span>
-          <h3>Source spelling can change identity authority</h3>
-          <p>After a Prometheus receiver, dotted <code>target_info</code> service keys replaced scrape-derived service identity in 16 of 22 paired topologies. Flattened keys remained separate resource attributes.</p>
-        </article>
-        <article class="rule caution-rule">
-          <span class="rule-no">06</span>
-          <h3>Normalization can merge concepts</h3>
-          <p>After a Prometheus receiver, keep=true plus underscore translation can collapse dotted and underscore identity keys into semicolon-joined values. <code>NoTranslation</code> keeps them distinct.</p>
-        </article>
-        <article class="rule">
-          <span class="rule-no">07</span>
-          <h3>Identity can have generations</h3>
-          <p>Two honor-false scrape boundaries can expose final, source, and intermediate identity as <code>job</code>, <code>exported_job</code>, and <code>exported_exported_job</code>.</p>
-        </article>
       </div>
     </section>
 
