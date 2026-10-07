@@ -1,4 +1,4 @@
-# Reproduce the complete 36-case identity matrix
+# Reproduce the complete 58-case identity matrix
 
 This directory contains the Docker-based harness used to test every protocol-valid configuration in the website's bounded state space:
 
@@ -9,8 +9,11 @@ This directory contains the Docker-based harness used to test every protocol-val
 - every applicable combination of receiver and final-scrape `honor_labels`
 - native OTLP `keep_identifying_resource_attributes=false` and `true`
 - `UnderscoreEscapingWithSuffixes` and `NoTranslation`
+- SDK Prometheus exporter source strategy: underscore-form or dotted resource labels, one strategy per case
 
-The authoritative state-space definition is [`cases.json`](cases.json). It contains 36 exact tuples: `E01`–`E09` and `U01`–`U27`.
+The authoritative state-space definition is [`cases.json`](cases.json). It contains 58 exact tuples. The original 36 IDs remain intact and use `UnderscoreEscapingWithSuffixes` at the SDK source. `D01`–`D22` are exact Prometheus-source topology twins configured with SDK `NoTranslation`. OTLP-source cases do not have a Prometheus source-strategy axis.
+
+The SDK strategy is exclusive. A container configured with `UnderscoreEscapingWithSuffixes` exposes `service_name` and `service_instance_id`; a container configured with `NoTranslation` exposes quoted OpenMetrics label names such as `"service.name"` and `"service.instance.id"`. The SDK never emits both forms in one case.
 
 ## Requirements
 
@@ -40,7 +43,7 @@ From the repository root:
 
 The script:
 
-1. builds the SDK fixture image;
+1. builds the SDK fixture image, whose Prometheus translation strategy is selected per case;
 2. creates a dedicated Docker network;
 3. renders exact Collector and Prometheus configuration for each tuple;
 4. starts every tuple with a fresh Prometheus container and fresh TSDB;
@@ -52,7 +55,7 @@ The script:
 A successful run ends with:
 
 ```text
-SUMMARY: 272/272 assertions passed; failures=0; coverage=36/36
+SUMMARY: 632/632 assertions passed; failures=0; coverage=58/58
 ```
 
 The final output line is the timestamped evidence directory. The same path is written to `experiments/complete-36/raw/LATEST`.
@@ -80,7 +83,7 @@ Collector routes additionally contain:
 
 At the run root:
 
-- `coverage-manifest.json` maps every case ID to its tuple, final series, evidence inventory, sizes, and hashes;
+- `coverage-manifest.json` maps every case ID to its tuple, final series, evidence inventory, sizes, and hashes; it also contains 22 machine-readable underscore-versus-dot comparisons;
 - `assertions.txt` contains every named pass/fail check;
 - `SHA256SUMS` covers the complete run;
 - `environment/` records Docker, container-image, host, and harness metadata.
@@ -95,9 +98,11 @@ jq '.coverage, .assertions' "$run_dir/coverage-manifest.json"
 sed -n '1,40p' "$run_dir/assertions.txt"
 jq '.data.result[].metric' "$run_dir/cases/U13/final-collision.json"
 jq '.data.result[].metric' "$run_dir/cases/U06/final-target-info.json"
+jq '.data.result[].metric' "$run_dir/cases/D04/final-ordinary.json"
+jq '.source_strategy_pairs[] | select(.dotted_case == "D04")' "$run_dir/coverage-manifest.json"
 ```
 
-`U13` demonstrates the three identity generations created by two honor-false scrape boundaries. `U06` demonstrates the semicolon-joined identifying values produced by keep=true plus underscore translation after a Prometheus receiver.
+`U13` demonstrates the three identity generations created by two honor-false scrape boundaries. `U06` demonstrates the semicolon-joined identifying values produced by keep=true plus underscore translation after a Prometheus receiver. `D05` is U06's dotted-source counterpart: the Collector receiver uses the SDK service identity, so final Prometheus stores `job="payments/checkout"` and `instance="sdk-1"` without semicolon joining.
 
 See [`EXPECTED_RESULTS.md`](EXPECTED_RESULTS.md) for the principal invariants and the cases that exercise them.
 
@@ -129,4 +134,4 @@ Delete a timestamped directory under `raw/runs/` only when its evidence is no lo
 
 ## Scope boundary
 
-This is complete coverage of the finite zero-or-one-Collector state space encoded in `cases.json`. It does not claim exhaustive coverage of arbitrary Collector graphs, intermediate Prometheus relay servers, multiple scrape-relabeling stages, vendor backends, malformed resource identity, or translation strategies other than the two listed above.
+This is complete coverage of the finite zero-or-one-Collector state space encoded in `cases.json`, including the two SDK source strategies for every Prometheus-source topology. It does not claim exhaustive coverage of arbitrary Collector graphs, intermediate Prometheus relay servers, multiple scrape-relabeling stages, vendor backends, malformed resource identity, or translation strategies other than the two listed above.

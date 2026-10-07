@@ -99,11 +99,13 @@ while IFS= read -r case_id; do
   docker run -d --name c36-sdk --network "$NETWORK" \
     -e MATRIX_OTLP_ENDPOINT="$otlp_endpoint" \
     -e MATRIX_OTLP_URL_PATH="$otlp_path" \
+    -e MATRIX_PROM_TRANSLATION_STRATEGY="$(jq -r '.case.source_strategy // "UnderscoreEscapingWithSuffixes"' "$case_dir/case.json")" \
     "$SDK_IMAGE" >/dev/null
   wait_url http://c36-sdk:9464/healthz
 
   sleep 8
-  dcurl -fsS http://c36-sdk:9464/metrics > "$case_dir/source-exposition.txt"
+  dcurl -fsS -H 'Accept: application/openmetrics-text; version=1.0.0; escaping=allow-utf-8' \
+    http://c36-sdk:9464/metrics > "$case_dir/source-exposition.txt"
   if [[ "$has_collector" == "true" ]] && [[ "$(jq -r '.case.exporter' "$case_dir/case.json")" == "prom" ]]; then
     dcurl -fsS -H 'Accept: application/openmetrics-text; version=1.0.0; escaping=allow-utf-8' \
       http://c36-collector:9464/metrics > "$case_dir/collector-exposition.txt"

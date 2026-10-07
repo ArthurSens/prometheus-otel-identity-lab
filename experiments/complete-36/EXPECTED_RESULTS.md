@@ -5,8 +5,27 @@ The harness treats the final Prometheus label sets as observed, version-specific
 ## Stable ordinary-series identity
 
 - Direct and Collector-mediated OTLP routes derive `job="payments/checkout"` and `instance="sdk-1"` from the fixed SDK resource unless a later Prometheus scrape with `honor_labels=false` replaces them.
-- A Collector Prometheus receiver derives primary resource identity from its scrape target. The ordinary downstream identity therefore uses `case-<id>-receiver` and `c36-sdk:9464` unless a later honor-false scrape replaces it.
+- With underscore-form SDK exposition, a Collector Prometheus receiver derives primary resource identity from its scrape target. The ordinary downstream identity therefore uses `case-<id>-receiver` and `c36-sdk:9464` unless a later honor-false scrape replaces it.
+- With dotted SDK exposition, `target_info`'s `service.name="checkout"`, `service.namespace="payments"`, and `service.instance.id="sdk-1"` replace the receiver-derived service identity. A downstream Prometheus, OTLP, or Remote Write exporter therefore emits `job="payments/checkout"` and `instance="sdk-1"`, unless a later honor-false scrape replaces them.
 - A final honor-false scrape assigns `case-<id>-final` and either `c36-sdk:9464` or `c36-collector:9464`, preserving the exporter-provided pair as `exported_job` and `exported_instance`.
+
+## SDK source translation strategy
+
+Each Prometheus-source topology is executed as an exclusive pair:
+
+- The original case uses SDK `UnderscoreEscapingWithSuffixes` and exposes `service_name`, `service_namespace`, and `service_instance_id`.
+- Its `Dxx` twin uses SDK `NoTranslation` and exposes `service.name`, `service.namespace`, and `service.instance.id` using quoted OpenMetrics label-name syntax.
+
+The source strategy changes identity authority in 16 of the 22 paired topologies. It does not change authority in the two direct-SDK scrapes or the four Collector Prometheus-exporter routes followed by `honor_labels=false`, because the final scrape target controls identity in those six pairs.
+
+The clearest pair is `U05` and `D04`, which share the same topology:
+
+```text
+U05 underscore source -> job="case-u05-receiver", instance="c36-sdk:9464"
+D04 dotted source     -> job="payments/checkout", instance="sdk-1"
+```
+
+This is the current implementation behavior behind the design discussion's Prometheus → OTel → Prometheus inconsistency.
 
 ## Collision-probe behavior
 
@@ -44,4 +63,6 @@ service.instance.id="c36-sdk:9464"
 service_instance_id="sdk-1"
 ```
 
-The complete exact label sets belong in the generated `coverage-manifest.json`, not in this prose summary.
+For the dotted counterpart, the receiver Resource contains only the dotted application identity; there is no second underscore application identity to collide with it. With keep=false (`D04`/`D06`), the identifying service attributes are omitted from generated `target_info`. With keep=true (`D05`/`D07`), they are repeated once without semicolon joining.
+
+The complete exact label sets and the 22 paired comparisons belong in the generated `coverage-manifest.json`, not in this prose summary.

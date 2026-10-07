@@ -11,6 +11,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/otlptranslator"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	otelprom "go.opentelemetry.io/otel/exporters/prometheus"
@@ -34,7 +35,14 @@ func main() {
 	)
 	must(err)
 
-	promReader, err := otelprom.New()
+	promStrategyName := env("MATRIX_PROM_TRANSLATION_STRATEGY", "UnderscoreEscapingWithSuffixes")
+	promStrategy := otlptranslator.UnderscoreEscapingWithSuffixes
+	if promStrategyName == "NoTranslation" {
+		promStrategy = otlptranslator.NoTranslation
+	} else if promStrategyName != "UnderscoreEscapingWithSuffixes" {
+		log.Fatalf("unsupported MATRIX_PROM_TRANSLATION_STRATEGY: %s", promStrategyName)
+	}
+	promReader, err := otelprom.New(otelprom.WithTranslationStrategy(promStrategy))
 	must(err)
 	otlpOptions := []otlpmetrichttp.Option{
 		otlpmetrichttp.WithEndpoint(env("MATRIX_OTLP_ENDPOINT", "collector:4318")),
@@ -116,7 +124,7 @@ func main() {
 		_, _ = fmt.Fprintln(w, "ok")
 	})
 	log.Printf("resource service.namespace=payments service.name=checkout service.instance.id=sdk-1 deployment.environment.name=lab resource.custom=resource-value")
-	log.Printf("listening on :9464; OTLP endpoint=%s path=%s", env("MATRIX_OTLP_ENDPOINT", "collector:4318"), env("MATRIX_OTLP_URL_PATH", "/v1/metrics"))
+	log.Printf("listening on :9464; Prometheus translation strategy=%s; OTLP endpoint=%s path=%s", promStrategyName, env("MATRIX_OTLP_ENDPOINT", "collector:4318"), env("MATRIX_OTLP_URL_PATH", "/v1/metrics"))
 	log.Fatal(http.ListenAndServe(":9464", nil))
 }
 

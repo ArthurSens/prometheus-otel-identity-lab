@@ -24,6 +24,22 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def identity_pairs(items):
+    return sorted({(item.get("job", ""), item.get("instance", "")) for item in items})
+
+
+def identity_authority(case):
+    if case["source"] == "prom":
+        if not case.get("collector") or (case["final"] == "scrape" and not case["final_honor"]):
+            return "final_scrape_target"
+        if case["source_strategy"] == "NoTranslation":
+            return "sdk_service_resource"
+        return "collector_receiver_scrape_target"
+    if case["final"] == "scrape" and not case["final_honor"]:
+        return "final_scrape_target"
+    return "sdk_service_resource"
+
+
 def main():
     if len(sys.argv) != 2:
         raise SystemExit("usage: analyze.py RUN_DIRECTORY")
@@ -51,6 +67,36 @@ def main():
         if case["source"] == "prom":
             check(case_id, "SDK exposition captured", (case_dir / "source-exposition.txt").stat().st_size > 0)
             check(case_id, "collision probe reached final Prometheus", bool(collision), f"series={len(collision)}")
+            source_text = (case_dir / "source-exposition.txt").read_text()
+            if case["source_strategy"] == "NoTranslation":
+                check(case_id, "SDK exposition retained dotted service.name", '"service.name"="checkout"' in source_text)
+                check(case_id, "SDK exposition retained dotted service.instance.id", '"service.instance.id"="sdk-1"' in source_text)
+            else:
+                check(case_id, "SDK exposition flattened service_name", 'service_name="checkout"' in source_text)
+                check(case_id, "SDK exposition flattened service_instance_id", 'service_instance_id="sdk-1"' in source_text)
+
+            if not case.get("collector"):
+                expected = [(f"case-{case_id.lower()}-final", "c36-sdk:9464")]
+            elif case["final"] == "scrape" and not case["final_honor"]:
+                expected = [(f"case-{case_id.lower()}-final", "c36-collector:9464")]
+            elif case["source_strategy"] == "NoTranslation":
+                expected = [("payments/checkout", "sdk-1")]
+            else:
+                expected = [(f"case-{case_id.lower()}-receiver", "c36-sdk:9464")]
+            check(
+                case_id,
+                "ordinary identity matches source-strategy semantics",
+                identity_pairs(ordinary) == expected,
+                f"expected={expected} actual={identity_pairs(ordinary)}",
+            )
+
+            expected_target_info = 2 if case.get("collector") and case.get("receiver_honor") else 1
+            check(
+                case_id,
+                "target_info cardinality matches receiver collision policy",
+                len(target_info) == expected_target_info,
+                f"expected={expected_target_info} actual={len(target_info)}",
+            )
         if case.get("collector"):
             checkpoint = case_dir / "checkpoint.jsonl"
             check(case_id, "post-receiver structured checkpoint captured", checkpoint.exists() and checkpoint.stat().st_size > 0)
@@ -77,14 +123,33 @@ def main():
             "evidence": evidence,
         })
 
+    by_id = {item["id"]: item for item in manifest}
+    source_strategy_pairs = []
+    for dotted in (item for item in manifest if item["tuple"].get("source_strategy") == "NoTranslation"):
+        underscore = by_id[dotted["tuple"]["source_case"]]
+        source_strategy_pairs.append({
+            "dotted_case": dotted["id"],
+            "underscore_case": underscore["id"],
+            "topology": {key: value for key, value in dotted["tuple"].items() if key not in {"id", "source_case", "source_strategy"}},
+            "underscore_ordinary_identity": identity_pairs(underscore["ordinary_series"]),
+            "dotted_ordinary_identity": identity_pairs(dotted["ordinary_series"]),
+            "underscore_identity_authority": identity_authority(underscore["tuple"]),
+            "dotted_identity_authority": identity_authority(dotted["tuple"]),
+            "underscore_target_info_count": len(underscore["target_info_series"]),
+            "dotted_target_info_count": len(dotted["target_info_series"]),
+            "identity_authority_changed": identity_authority(underscore["tuple"]) != identity_authority(dotted["tuple"]),
+        })
+
     passed = sum(1 for item in assertions if item["passed"])
     failed = len(assertions) - passed
     coverage = {
         "scope": "SDK -> optional maximum one Collector -> final Prometheus",
         "versions": {"prometheus": "3.14.0", "collector_contrib": "0.162.0"},
-        "strategies": ["UnderscoreEscapingWithSuffixes", "NoTranslation"],
+        "source_prometheus_strategies": ["UnderscoreEscapingWithSuffixes", "NoTranslation"],
+        "downstream_translation_strategies": ["UnderscoreEscapingWithSuffixes", "NoTranslation"],
         "coverage": {"covered": len(manifest), "total": len(cases)},
         "assertions": {"passed": passed, "failed": failed, "total": len(assertions)},
+        "source_strategy_pairs": source_strategy_pairs,
         "cases": manifest,
     }
     (run_dir / "coverage-manifest.json").write_text(json.dumps(coverage, indent=2, sort_keys=True) + "\n")
