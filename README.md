@@ -1,6 +1,6 @@
 # Prometheus × OpenTelemetry Identity Lab
 
-Static, dependency-free interactive site based on Arthur's Editorial Brain and the clean identity-boundary Lab rerun.
+Static, dependency-free technical explainer based on Arthur's Editorial Brain and the clean identity-boundary Lab rerun. The presentation is intentionally evidence-first and avoids product or campaign framing.
 
 ## Run locally
 

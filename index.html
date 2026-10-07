@@ -22,49 +22,39 @@
       <a href="#findings">Findings</a>
       <a href="#evidence">Evidence</a>
     </nav>
-    <span class="scope-chip">Prometheus 3.14.0 · Collector 0.162.0</span>
+    <span class="scope-chip">Experiment scope · Prometheus 3.14.0 · Collector 0.162.0</span>
   </header>
 
   <main id="top">
     <section class="hero" aria-labelledby="hero-title">
       <div class="hero-copy">
-        <p class="eyebrow"><span></span> Prometheus × OpenTelemetry Lab · 01</p>
-        <h1 id="hero-title">Identity is rebuilt<br><em>at every boundary.</em></h1>
-        <p class="dek">Follow one service — <code>payments / checkout / sdk-1</code> — as resource attributes become labels, scrape targets take control, and <code>target_info</code> carries context across the gap.</p>
-        <div class="hero-actions">
-          <a class="button primary" href="#experiment">Open the experiment <span>↓</span></a>
-          <a class="button secondary" href="#evidence">Read the evidence</a>
-        </div>
+        <p class="eyebrow"><span></span> Technical note · identity boundary experiment</p>
+        <h1 id="hero-title">How does identity change between Prometheus and OpenTelemetry?</h1>
+        <p class="dek">This is an interactive reading of one controlled experiment. It follows the same service identity — <code>payments / checkout / sdk-1</code> — through exposition, scrape, Collector receivers and exporters, OTLP, Remote Write 2.0, and Prometheus storage.</p>
+        <p class="hero-method">Use the workbench below to compare observed boundaries. If a component transition was not exercised by the experiment, the interface marks it as unknown instead of predicting a result.</p>
       </div>
-      <div class="hero-visual" aria-label="Identity transformation overview">
-        <div class="orbit orbit-a"></div><div class="orbit orbit-b"></div>
-        <article class="identity-card card-otel">
-          <span class="card-kicker">OTel resource</span>
-          <strong>checkout</strong>
-          <code>service.namespace = payments</code>
-          <code>service.instance.id = sdk-1</code>
-        </article>
-        <div class="hero-transform"><span>projection</span><b>→</b></div>
-        <article class="identity-card card-prom">
-          <span class="card-kicker">Prometheus series</span>
-          <strong>requests_total</strong>
-          <code>job = payments/checkout</code>
-          <code>instance = sdk-1</code>
-        </article>
-        <aside class="hero-note"><b>44 / 44</b><span>identity assertions passed</span></aside>
-      </div>
+      <aside class="study-card" aria-label="Experiment frame">
+        <div class="study-card-head"><span>EXPERIMENT FRAME</span><b>clean Docker rerun</b></div>
+        <dl>
+          <div><dt>Question</dt><dd>Which identity exists at each observable boundary, and which component changes it?</dd></div>
+          <div><dt>Fixture</dt><dd><code>service.namespace=payments</code><br><code>service.name=checkout</code><br><code>service.instance.id=sdk-1</code></dd></div>
+          <div><dt>Versions</dt><dd>Prometheus 3.14.0<br>Collector Contrib 0.162.0</dd></div>
+          <div><dt>Checks</dt><dd><strong>44 / 44 passed</strong></dd></div>
+          <div><dt>In scope</dt><dd><code>job</code>, <code>instance</code>, resource identity, <code>target_info</code></dd></div>
+        </dl>
+      </aside>
     </section>
 
     <section class="thesis-strip" aria-label="Core thesis">
-      <span>THE THESIS</span>
+      <span>WORKING CONCLUSION</span>
       <p><code>job</code> and <code>instance</code> are boundary-specific projections — not immutable application fields.</p>
     </section>
 
     <section class="experiment-section" id="experiment" aria-labelledby="experiment-title">
       <div class="section-heading">
         <div>
-          <p class="eyebrow"><span></span> Interactive evidence explorer</p>
-          <h2 id="experiment-title">Compose a pipeline.<br>Inspect every hand-off.</h2>
+          <p class="eyebrow"><span></span> Boundary workbench</p>
+          <h2 id="experiment-title">Inspect the transformation, one boundary at a time.</h2>
         </div>
         <p>Choose a tested route or alter the chain. Every supported transition comes from the clean Docker rerun. Untested transitions are clearly flagged.</p>
       </div>
@@ -125,7 +115,7 @@
       <div class="section-heading compact">
         <div>
           <p class="eyebrow"><span></span> What the experiment supports</p>
-          <h2 id="findings-title">Four rules. One caveat.</h2>
+          <h2 id="findings-title">Observed transformation rules</h2>
         </div>
       </div>
       <div class="rule-grid">
@@ -161,7 +151,7 @@
     <section class="evidence" id="evidence" aria-labelledby="evidence-title">
       <div class="evidence-copy">
         <p class="eyebrow light"><span></span> Evidence, not animation</p>
-        <h2 id="evidence-title">Every visible change maps back to a captured boundary.</h2>
+        <h2 id="evidence-title">Trace every claim back to a captured boundary.</h2>
         <p>The rerun preserved exposition pages, structured Collector checkpoints, debug logs, Prometheus API responses, environment metadata, hashes, and named assertion results.</p>
         <div class="source-links">
           <a href="https://docs.google.com/document/d/1LKj4Ey2WGNCW45PQFE5W3CgSUuXRlzq7vxcib6llpHU" target="_blank" rel="noreferrer">Lab report <span>↗</span></a>
