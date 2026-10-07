@@ -108,6 +108,21 @@ jq '.source_strategy_pairs[] | select(.dotted_case == "D04")' "$run_dir/coverage
 
 See [`EXPECTED_RESULTS.md`](EXPECTED_RESULTS.md) for the principal invariants and the cases that exercise them.
 
+## Generate specification-predicted alternatives
+
+The stakeholder design alternatives are not implemented in a released Prometheus or Collector. The repository therefore keeps their outputs separate from runtime evidence. Generate the counterfactual dataset from the latest measured run with:
+
+```bash
+run_dir=$(cat experiments/complete-36/raw/LATEST)
+python3 experiments/complete-36/model_alternatives.py \
+  "$run_dir" \
+  experiments/complete-36/predicted
+```
+
+The checked-in [`predicted/alternative-variants.json`](predicted/alternative-variants.json) contains boundary-level Resource state, identity authority, final `job`/`instance`, target-info projections, assumptions, and confidence for B, C, C.1, and symbolic E variants. [`predicted/alternative-variants.csv`](predicted/alternative-variants.csv) is the flat editor-facing form, and [`predicted/README.md`](predicted/README.md) explains how to interpret it.
+
+These artifacts are specification predictions, not test results. B, C, and C.1 rows are conditional on the documented rules and feature settings. Option E remains symbolic where UUID and Entity behavior is unresolved.
+
 ## Rerun with a separate namespace
 
 The defaults are safe for one run at a time. To avoid colliding with another local invocation, override the Docker network and SDK image names:

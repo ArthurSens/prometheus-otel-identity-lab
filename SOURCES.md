@@ -18,5 +18,6 @@ The interactive composer is constrained to the Lab topology: fixed OTel SDK sour
 - OpenTelemetry Collector Contrib `0.162.0`
 - Clean Docker rerun: 58/58 exact configurations covered; 676/676 named assertions passed
 - Prometheus-source coverage: 22 topology pairs, each run once with underscore-form SDK exposition and once with dotted SDK exposition
+- Counterfactual coverage: six specification profiles across all 58 cases (348 rows), kept separate from measured evidence; Option E is symbolic where the design remains unresolved
 - Analyzed: `job`, `instance`, OTel resource identity, `target_info`
 - Out of scope: metric names/types, scope data, histograms, timestamps, temporality, exemplars, and HELP/TYPE/UNIT

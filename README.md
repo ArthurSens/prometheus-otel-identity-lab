@@ -35,4 +35,6 @@ The reproduction fixture uses stable scrape jobs across the matrix: `identity-la
 ./experiments/complete-36/run.sh
 ```
 
+The lab also includes a separate [specification-predicted alternatives dataset](experiments/complete-36/predicted/README.md). It applies the stakeholder proposals B, C, C.1, and E to the measured matrix without presenting those counterfactuals as runtime evidence.
+
 See the [complete reproduction guide](experiments/complete-36/README.md) for prerequisites, evidence layout, inspection commands, expected results, and troubleshooting.
