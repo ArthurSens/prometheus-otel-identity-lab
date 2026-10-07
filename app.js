@@ -22,9 +22,11 @@ const EXPORTER={otlp:"OTLP exporter",prom:"Prometheus exporter",rw2:"Remote Writ
 const INGEST={otlp:"native OTLP receiver",prom:"scrape",rw2:"Remote Write 2.0 receiver"};
 const RECEIVER={otlp:"OTLP receiver",prom:"Prometheus receiver",rw2:"Remote Write 2.0 receiver"};
 
-// Exact route tuples from the Lab's 36/36 coverage manifest. Intermediate
+// Exact route tuples from the Lab's original 36-case coverage manifest. The
+// Lab's 22 dotted-source twins are derived below from their recorded pairs.
+// Intermediate
 // Prometheus relays and routes with more than one Collector remain out of scope.
-const COVERAGE_CASES=[
+const BASE_COVERAGE_CASES=[
   {id:"E01",source:"prom",collector:false,final:"scrape",final_honor:false},
   {id:"E02",source:"prom",collector:false,final:"scrape",final_honor:true},
   {id:"E03",source:"prom",collector:true,receiver_honor:false,exporter:"prom",strategy:DEFAULT_TRANSLATION,final:"scrape",final_honor:true},
@@ -62,12 +64,15 @@ const COVERAGE_CASES=[
   {id:"U26",source:"otlp",collector:true,exporter:"otlp",strategy:"NoTranslation",final:"otlp",keep:false},
   {id:"U27",source:"otlp",collector:true,exporter:"otlp",strategy:"NoTranslation",final:"otlp",keep:true}
 ];
+const DOTTED_SOURCE_PAIRS={E01:"D01",E02:"D02",E03:"D03",U05:"D04",U06:"D05",U07:"D06",U08:"D07",U09:"D08",U10:"D09",U11:"D10",U12:"D11",U13:"D12",U14:"D13",U15:"D14",U16:"D15",U17:"D16",U18:"D17",U19:"D18",U20:"D19",U21:"D20",U22:"D21",U23:"D22"};
+const UNDERSCORE_CASES=BASE_COVERAGE_CASES.map(item=>item.source==="prom"?{...item,source_strategy:DEFAULT_TRANSLATION}:item);
+const COVERAGE_CASES=[...UNDERSCORE_CASES,...Object.entries(DOTTED_SOURCE_PAIRS).map(([sourceCase,id])=>({...UNDERSCORE_CASES.find(item=>item.id===sourceCase),id,source_strategy:"NoTranslation",source_case:sourceCase}))];
 
-let model={source:"otlp",stages:[collector("prom")],final:destination({honorLabels:true})};
+let model={source:"otlp",sourceStrategy:DEFAULT_TRANSLATION,stages:[collector("prom")],final:destination({honorLabels:true})};
 let activePreset="p4",selectedRange={start:0,end:0};
 let activeConnections=[];
 const clone=value=>JSON.parse(JSON.stringify(value));
-function selectPreset(id){const p=PRESETS.find(x=>x.id===id);model={source:p.source,stages:clone(p.stages),final:clone(p.final)};activePreset=id;selectedRange={start:0,end:0};render()}
+function selectPreset(id){const p=PRESETS.find(x=>x.id===id);model={source:p.source,sourceStrategy:p.sourceStrategy||DEFAULT_TRANSLATION,stages:clone(p.stages),final:clone(p.final)};activePreset=id;selectedRange={start:0,end:0};render()}
 function markCustom(){activePreset="custom"}
 function outputOfStage(stage){return stage.type==="collector"?stage.exporter:"rw2"}
 function inputProtocolAt(stageIndex){let p=model.source;for(let i=0;i<stageIndex;i++)p=outputOfStage(model.stages[i]);return p}
@@ -81,17 +86,20 @@ function currentCoverageTuple(){
   if(stage){tuple.exporter=stage.exporter;if(model.source==="prom")tuple.receiver_honor=stage.honorLabels;if(["prom","rw2"].includes(stage.exporter))tuple.strategy=stage.translationStrategy}
   if(input==="prom")tuple.final_honor=model.final.honorLabels;
   if(input==="otlp"){tuple.strategy=model.final.translationStrategy;tuple.keep=model.final.keepIdentifying}
+  if(model.source==="prom")tuple.source_strategy=model.sourceStrategy;
   return tuple;
 }
-function sameTuple(a,b){const keys=new Set([...Object.keys(a||{}),...Object.keys(b||{})]);keys.delete("id");return [...keys].every(key=>a?.[key]===b?.[key])}
+function sameTuple(a,b){const keys=new Set([...Object.keys(a||{}),...Object.keys(b||{})]);keys.delete("id");keys.delete("source_case");return [...keys].every(key=>a?.[key]===b?.[key])}
 function matchedCoverageCase(){const tuple=currentCoverageTuple();return tuple?COVERAGE_CASES.find(item=>sameTuple(item,tuple))||null:null}
+function pairedCoverageCase(evidence=matchedCoverageCase()){if(!evidence||evidence.source!=="prom")return null;const pairedId=evidence.source_case||DOTTED_SOURCE_PAIRS[evidence.id];return pairedId?COVERAGE_CASES.find(item=>item.id===pairedId)||null:null}
 function caseSlug(){return matchedCoverageCase()?.id.toLowerCase()||"configured"}
 function translatedKey(key,strategy){return strategy==="NoTranslation"?key:key.replaceAll(".","_")}
 function putLabel(target,key,value,prepend=false){if(value==null)return;if(target[key]&&target[key]!==value)target[key]=prepend?`${value};${target[key]}`:`${target[key]};${value}`;else target[key]=value}
 
 function initialState(){
   if(model.source==="otlp")return {protocol:"otlp",kind:"OTel resource",resource:{"service.namespace":"payments","service.name":"checkout","service.instance.id":"sdk-1","deployment.environment.name":"lab","resource.custom":"resource-value"},labels:null,targetInfo:null};
-  return {protocol:"prom",kind:"Prometheus exposition",resource:null,labels:{job:null,instance:null},targetInfo:{service_name:"checkout",service_namespace:"payments",service_instance_id:"sdk-1",deployment_environment_name:"lab",resource_custom:"resource-value"}};
+  const resource={"service.name":"checkout","service.namespace":"payments","service.instance.id":"sdk-1","deployment.environment.name":"lab","resource.custom":"resource-value"};
+  return {protocol:"prom",kind:"Prometheus exposition",resource:null,labels:{job:null,instance:null},targetInfo:Object.fromEntries(Object.entries(resource).map(([key,value])=>[translatedKey(key,model.sourceStrategy),value]))};
 }
 function receiverIdentity(input,stage){
   if(stage.honorLabels&&input.labels?.job)return {job:input.labels.job,instance:input.labels.instance};
@@ -225,7 +233,7 @@ function componentSettings(component,input,owner,index){
   if((component.type==="promRelay"||owner==="final")&&input==="otlp"){controls.push(settingToggle(owner,index,"keepIdentifying","keep identifying attrs",component.keepIdentifying,"native OTLP receiver"));controls.push(translationControl(owner,index,component.translationStrategy,"native OTLP receiver"))}
   return controls.length?`<div class="node-settings"><span class="settings-title">Component configuration</span>${controls.join("")}</div>`:"";
 }
-function sourceNode(){return `<div class="pipe-node composite fixed-node" data-family="otel"><span class="node-kind">Fixed source</span><b>OpenTelemetry SDK</b><label>output<select data-source-output><option value="otlp" ${model.source==="otlp"?"selected":""}>OTLP exporter</option><option value="prom" ${model.source==="prom"?"selected":""}>Prometheus exporter</option></select></label><small>Semantic resource: payments / checkout / sdk-1</small></div>`}
+function sourceNode(){const strategy=model.source==="prom"?`<div class="node-settings"><span class="settings-title">Component configuration</span>${translationControl("source",0,model.sourceStrategy,"Prometheus exporter source labels")}</div>`:"";return `<div class="pipe-node composite fixed-node" data-family="otel"><span class="node-kind">Fixed source</span><b>OpenTelemetry SDK</b><label>output<select data-source-output><option value="otlp" ${model.source==="otlp"?"selected":""}>OTLP exporter</option><option value="prom" ${model.source==="prom"?"selected":""}>Prometheus exporter</option></select></label>${strategy}<small>Semantic resource: payments / checkout / sdk-1</small></div>`}
 function stageNode(stage,i){const input=inputProtocolAt(i);if(stage.type==="collector")return `<div class="pipe-node composite" data-family="otel"><span class="node-kind">Collector ${i+1}</span><b>OpenTelemetry Collector</b><label>receiver<input value="${RECEIVER[input]}" disabled></label><label>exporter<select data-exporter="${i}"><option value="otlp" ${stage.exporter==="otlp"?"selected":""}>OTLP exporter</option><option value="prom" ${stage.exporter==="prom"?"selected":""}>Prometheus exporter</option><option value="rw2" ${stage.exporter==="rw2"?"selected":""}>RW 2.0 exporter</option></select></label>${componentSettings(stage,input,"stage",i)}${stageButtons(i)}</div>`;return `<div class="pipe-node composite" data-family="prom"><span class="node-kind">Intermediate server</span><b>Prometheus relay</b><label>ingestion<input value="${INGEST[input]}" disabled></label><label>output<input value="Remote Write 2.0" disabled></label>${componentSettings(stage,input,"stage",i)}${stageButtons(i)}</div>`}
 function stageButtons(i){return `<div class="stage-actions"><button data-move-left="${i}" ${i===0?"disabled":""} aria-label="Move stage left">←</button><button data-move-right="${i}" ${i===model.stages.length-1?"disabled":""} aria-label="Move stage right">→</button><button data-remove-stage="${i}" aria-label="Remove stage">Remove</button></div>`}
 function finalNode(){const input=finalInputProtocol();return `<div class="pipe-node composite fixed-node" data-family="prom"><span class="node-kind">Fixed destination</span><b>Prometheus server</b><label>ingestion<input value="${INGEST[input]}" disabled></label>${componentSettings(model.final,input,"final",0)}<small>Final queryable storage · cannot be removed</small></div>`}
@@ -240,7 +248,7 @@ function renderWorkbench(){
   document.querySelectorAll("[data-remove-stage]").forEach(b=>b.onclick=()=>{model.stages.splice(+b.dataset.removeStage,1);markCustom();clampSelection();render()});
   document.querySelectorAll("[data-move-left]").forEach(b=>b.onclick=()=>moveStage(+b.dataset.moveLeft,-1));document.querySelectorAll("[data-move-right]").forEach(b=>b.onclick=()=>moveStage(+b.dataset.moveRight,1));
   const selectedCount=selectedRange.end-selectedRange.start+1;document.querySelector("#boundary-selection-help").textContent=selectedCount===1?"One boundary selected. Click another arrow to extend the comparison across every component between them.":`${selectedCount} consecutive boundaries selected. Click a selected arrow to start a new range.`;
-  const evidence=matchedCoverageCase(),status=document.querySelector("#coverage-status");status.textContent=evidence?`LAB TESTED · ${evidence.id}`:"OUTSIDE 36-CASE LAB SCOPE";status.style.background=evidence?"#e7f5f2":"#fff6dc";status.style.color=evidence?"#087368":"#775d00";const banner=document.querySelector("#unsupported-banner");banner.hidden=Boolean(evidence);banner.textContent="This graph is outside the Lab's complete zero-or-one-Collector matrix. The inspector applies component-level rules, but this full composition was not run end-to-end.";renderInspector();
+  const evidence=matchedCoverageCase(),paired=pairedCoverageCase(evidence),status=document.querySelector("#coverage-status");status.textContent=evidence?`LAB TESTED · ${evidence.id}${paired?` · PAIRED WITH ${paired.id}`:""}`:"OUTSIDE 58-CASE LAB SCOPE";status.style.background=evidence?"#e7f5f2":"#fff6dc";status.style.color=evidence?"#087368":"#775d00";const banner=document.querySelector("#unsupported-banner");banner.hidden=Boolean(evidence);banner.textContent="This graph is outside the Lab's complete zero-or-one-Collector matrix. The inspector applies component-level rules, but this full composition was not run end-to-end.";renderInspector();
 }
 function selectBoundary(index){
   const {start,end}=selectedRange;
@@ -251,7 +259,8 @@ function selectBoundary(index){
 }
 function clampSelection(){const max=model.stages.length;selectedRange.start=Math.min(selectedRange.start,max);selectedRange.end=Math.min(selectedRange.end,max);if(selectedRange.start>selectedRange.end)selectedRange.start=selectedRange.end}
 function updateSetting(el){
-  const target=el.dataset.settingOwner==="final"?model.final:model.stages[+el.dataset.settingIndex];target[el.dataset.settingKey]=el.type==="checkbox"?el.checked:el.value;
+  if(el.dataset.settingOwner==="source")model.sourceStrategy=el.value;
+  else{const target=el.dataset.settingOwner==="final"?model.final:model.stages[+el.dataset.settingIndex];target[el.dataset.settingKey]=el.type==="checkbox"?el.checked:el.value}
   markCustom();renderWorkbench();
 }
 function moveStage(i,delta){const j=i+delta;if(j<0||j>=model.stages.length)return;[model.stages[i],model.stages[j]]=[model.stages[j],model.stages[i]];markCustom();render()}

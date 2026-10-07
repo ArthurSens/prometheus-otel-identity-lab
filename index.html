@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Play:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261007-14">
+  <link rel="stylesheet" href="styles.css?v=20261007-15">
 </head>
 <body>
   <div class="noise" aria-hidden="true"></div>
@@ -31,7 +31,7 @@
         <p class="eyebrow"><span></span> Technical note · identity boundary experiment</p>
         <h1 id="hero-title">How does identity change between Prometheus and OpenTelemetry?</h1>
         <p class="dek">This is an interactive reading of one controlled experiment. It follows the same service identity — <code>payments / checkout / sdk-1</code> — through exposition, scrape, Collector receivers and exporters, OTLP, Remote Write 2.0, and Prometheus storage.</p>
-        <p class="hero-method">Use the workbench below to compare observed boundaries. The Lab covers all 36 configurations with zero or one Collector; graphs beyond that finite scope remain explicitly marked.</p>
+        <p class="hero-method">Use the workbench below to compare observed boundaries. The Lab covers all 58 configurations with zero or one Collector, including paired dotted and flattened SDK exposition; graphs beyond that finite scope remain explicitly marked.</p>
       </div>
     </section>
 
@@ -131,11 +131,16 @@
         </article>
         <article class="rule caution-rule">
           <span class="rule-no">05</span>
+          <h3>Source spelling can change identity authority</h3>
+          <p>After a Prometheus receiver, dotted <code>target_info</code> service keys replaced scrape-derived service identity in 16 of 22 paired topologies. Flattened keys remained separate resource attributes.</p>
+        </article>
+        <article class="rule caution-rule">
+          <span class="rule-no">06</span>
           <h3>Normalization can merge concepts</h3>
           <p>After a Prometheus receiver, keep=true plus underscore translation can collapse dotted and underscore identity keys into semicolon-joined values. <code>NoTranslation</code> keeps them distinct.</p>
         </article>
         <article class="rule">
-          <span class="rule-no">06</span>
+          <span class="rule-no">07</span>
           <h3>Identity can have generations</h3>
           <p>Two honor-false scrape boundaries can expose final, source, and intermediate identity as <code>job</code>, <code>exported_job</code>, and <code>exported_exported_job</code>.</p>
         </article>
@@ -148,7 +153,7 @@
         <h2 id="evidence-title">Trace every claim back to a captured boundary.</h2>
         <p>The rerun preserved exposition pages, structured Collector checkpoints, debug logs, Prometheus API responses, environment metadata, hashes, and named assertion results.</p>
         <div class="source-links">
-          <a href="https://docs.google.com/document/d/1LKj4Ey2WGNCW45PQFE5W3CgSUuXRlzq7vxcib6llpHU" target="_blank" rel="noreferrer">Lab report <span>↗</span></a>
+          <a href="https://docs.google.com/document/d/1NcVE-wGccI8HcNW2TFuiN3mBDNtKw5h6-Kw7gb7rRGk/edit" target="_blank" rel="noreferrer">Complete Lab report <span>↗</span></a>
           <a href="https://drive.google.com/file/d/1Tk_u0ocZVLu19xnzVMficZgkohsjwzFF/view" target="_blank" rel="noreferrer">Canonical Markdown <span>↗</span></a>
           <a href="https://drive.google.com/file/d/1U4NV0Z7ahvBDOufBusfHNNamdrl8By8X/view" target="_blank" rel="noreferrer">Evidence archive <span>↗</span></a>
         </div>
@@ -156,10 +161,10 @@
       <div class="evidence-ledger">
         <div class="ledger-head"><span>CAPTURE</span><span>PROVES</span></div>
         <div><code>exposition/*.txt</code><p>Exact exporter page before a scrape</p></div>
-        <div><code>coverage-manifest.json</code><p>All 36 normalized tuples and their final observed label sets</p></div>
+        <div><code>coverage-manifest.json</code><p>All 58 normalized tuples, 22 source-strategy pairs, and final observed label sets</p></div>
         <div><code>cases/*/checkpoint.jsonl</code><p>Resource and datapoint identity inside Collectors</p></div>
         <div><code>cases/*/final-*.json</code><p>What Prometheus actually stored</p></div>
-        <div><code>assertions.txt</code><p>272 named checks from the clean rerun</p></div>
+        <div><code>assertions.txt</code><p>632 named checks from the clean rerun</p></div>
         <div><code>SHA256SUMS</code><p>Integrity of the evidence set</p></div>
       </div>
     </section>
@@ -170,6 +175,6 @@
     <p>Observed behavior, specification requirements, implementation choices, and proposed future behavior are different things. This site reports the first.</p>
     <span>Arthur’s Editorial Brain · Lab 01</span>
   </footer>
-  <script src="app.js?v=20261007-14"></script>
+  <script src="app.js?v=20261007-15"></script>
 </body>
 </html>
