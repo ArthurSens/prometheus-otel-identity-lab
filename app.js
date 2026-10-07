@@ -60,6 +60,7 @@ let comparisonMode=false;
 let compareModel=null;
 let selectedRange={start:0,end:0};
 let activeConnections=[];
+let connectionMode="trace";
 const clone=value=>JSON.parse(JSON.stringify(value));
 function usingModel(target,callback){const previous=model;model=target;try{return callback()}finally{model=previous}}
 function evidenceFor(target){return usingModel(target,()=>matchedCoverageCase())}
@@ -165,16 +166,29 @@ function classifyRows(rows,otherRows,side){
   return rows.map(([key,value])=>{
     const exact=otherRows.some(([otherKey,otherValue])=>otherKey===key&&comparable(otherValue)===comparable(value));
     if(exact)return [key,value,"unchanged"];
+    const sameKey=otherRows.some(([otherKey])=>otherKey===key);
+    if(sameKey)return [key,value,"remapped","value changed"];
     const remapped=otherRows.some(([,otherValue])=>comparable(otherValue)===comparable(value))||otherRows.some(([,otherValue])=>valuesRelated(value,otherValue));
     if(remapped)return [key,value,"remapped"];
     return [key,value,side==="before"?"lost":"derived"];
   });
 }
-function connectionPairs(beforeRows,afterRows){
+function connectionPairs(beforeRows,afterRows,mode="trace"){
+  if(mode==="compare"){
+    const used=new Set(),pairs=[];
+    beforeRows.forEach(([beforeKey,beforeValue,beforeStatus],from)=>{
+      if(beforeStatus==="lost")return;
+      const candidates=afterRows.map(([key,value,status],to)=>({key,value,status,to})).filter(item=>!used.has(item.to)&&item.status!=="derived");
+      const match=candidates.find(item=>item.key===beforeKey&&comparable(item.value)===comparable(beforeValue))||candidates.find(item=>item.key===beforeKey)||candidates.find(item=>comparable(item.value)===comparable(beforeValue))||candidates.find(item=>valuesRelated(beforeValue,item.value));
+      if(match){used.add(match.to);pairs.push({from,to:match.to,status:beforeStatus==="unchanged"&&match.status==="unchanged"?"unchanged":"remapped"})}
+    });
+    return pairs;
+  }
   const pairs=[];
   beforeRows.forEach(([beforeKey,beforeValue,beforeStatus],from)=>{
     if(beforeStatus==="lost")return;
     let matches=afterRows.map(([key,value],to)=>({key,value,to})).filter(item=>item.key===beforeKey&&comparable(item.value)===comparable(beforeValue));
+    if(!matches.length)matches=afterRows.map(([key,value],to)=>({key,value,to})).filter(item=>item.key===beforeKey);
     if(!matches.length)matches=afterRows.map(([key,value],to)=>({key,value,to})).filter(item=>comparable(item.value)===comparable(beforeValue));
     if(!matches.length)matches=afterRows.map(([key,value],to)=>({key,value,to})).filter(item=>valuesRelated(beforeValue,item.value));
     matches.forEach(item=>{const afterStatus=afterRows[item.to][2];if(afterStatus!=="derived"&&afterStatus!=="lost")pairs.push({from,to:item.to,status:beforeStatus==="unchanged"&&afterStatus==="unchanged"?"unchanged":"remapped"})});
@@ -191,13 +205,14 @@ function drawFieldConnectors(){
     const fromEl=document.querySelector(`#before-state [data-row-index="${from}"]`),toEl=document.querySelector(`#after-state [data-row-index="${to}"]`);
     if(!fromEl||!toEl)return "";
     const a=fromEl.getBoundingClientRect(),b=toEl.getBoundingClientRect();let d;
-    if(vertical){const x1=a.left+a.width/2-gridRect.left,y1=a.bottom-gridRect.top,x2=b.left+b.width/2-gridRect.left,y2=b.top-gridRect.top,mid=(y1+y2)/2;d=`M ${x1} ${y1} C ${x1} ${mid}, ${x2} ${mid}, ${x2} ${y2}`}
-    else{const x1=a.right-gridRect.left,y1=a.top+a.height/2-gridRect.top,x2=b.left-gridRect.left,y2=b.top+b.height/2-gridRect.top,mid=(x1+x2)/2;d=`M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`}
-    return `<path class="field-link link-${status}" d="${d}" marker-end="url(#arrow-${status})"/>`;
+    if(vertical){const x1=a.left+a.width/2-gridRect.left,y1=a.bottom-gridRect.top,x2=b.left+b.width/2-gridRect.left,y2=b.top-gridRect.top,mid=(y1+y2)/2;d=connectionMode==="compare"?`M ${x1} ${y1} L ${x2} ${y2}`:`M ${x1} ${y1} C ${x1} ${mid}, ${x2} ${mid}, ${x2} ${y2}`}
+    else{const x1=a.right-gridRect.left,y1=a.top+a.height/2-gridRect.top,x2=b.left-gridRect.left,y2=b.top+b.height/2-gridRect.top,mid=(x1+x2)/2;d=connectionMode==="compare"?`M ${x1} ${y1} L ${x2} ${y2}`:`M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`}
+    return `<path class="field-link ${connectionMode==="compare"?"compare-field-link ":""}link-${status}" d="${d}" ${connectionMode==="trace"?`marker-end="url(#arrow-${status})"`:""}/>`;
   }).join("");
   svg.innerHTML=`<defs><marker id="arrow-unchanged" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#69737a"/></marker><marker id="arrow-remapped" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#9a7200"/></marker></defs>${paths}`;
-  grid.classList.toggle("has-field-links",Boolean(paths));
+  grid.classList.toggle("has-field-links",Boolean(paths));grid.classList.toggle("is-comparison",connectionMode==="compare");
 }
+function renderLegend(mode){document.querySelector("#diff-legend").innerHTML=mode==="compare"?`<span><i class="diff-swatch diff-unchanged"></i>Same label + value</span><span><i class="diff-swatch diff-remapped"></i>Changed / remapped</span><span><i class="diff-swatch diff-derived"></i>Only in B</span><span><i class="diff-swatch diff-lost"></i>Only in A</span>`:`<span><i class="diff-swatch diff-unchanged"></i>Same</span><span><i class="diff-swatch diff-remapped"></i>Remapped</span><span><i class="diff-swatch diff-derived"></i>New / derived</span><span><i class="diff-swatch diff-lost"></i>Lost</span>`}
 function nodeAction(node,input){if(node.type==="collector")return `${RECEIVER[input.protocol]} → ${EXPORTER[node.exporter]}`;return `${INGEST[input.protocol]} → storage`}
 function interpretation(node,input){
   if(node.type==="collector"){const receive=input.protocol==="otlp"?"The OTLP receiver preserves structured resource identity.":`The ${RECEIVER[input.protocol]} uses its scrape identity, then reconstructs primary resource identity from job and instance and consumes target_info into resource attributes.`;const send=node.exporter==="otlp"?"The OTLP exporter keeps the resulting resource structured.":`The ${EXPORTER[node.exporter]} projects the resulting resource into job, instance, and target_info using its translation strategy.`;return `${receive} ${send}`}
@@ -262,6 +277,7 @@ function componentName(node){return node.type==="source"?"OTel SDK":node.type===
 function componentPathName(node,index,logical){if(node.type==="collector"){const total=logical.filter(item=>item.type==="collector").length,ordinal=logical.slice(0,index+1).filter(item=>item.type==="collector").length;return total>1?`Collector ${ordinal}`:"Collector"}return componentName(node)}
 function renderInspector(){
   if(comparisonMode){renderComparisonInspector();return}
+  connectionMode="trace";renderLegend("trace");
   const {logical,states}=compute(),start=selectedRange.start,end=selectedRange.end,before=states[start],after=states[end+1],nodes=logical.slice(start+1,end+2),path=logical.slice(start,end+2),beforeRows=stateRows(before),afterRows=stateRows(after),classifiedBefore=classifyRows(beforeRows,afterRows,"before"),classifiedAfter=classifyRows(afterRows,beforeRows,"after"),total=logical.length-1,count=end-start+1,beforePanel=document.querySelector("#before-state").closest(".state-panel"),afterPanel=document.querySelector("#after-state").closest(".state-panel");
   beforePanel.dataset.family=protocolFamily(before.protocol);afterPanel.dataset.family=protocolFamily(after.protocol);
   document.querySelector("#inspector-range-label").textContent=count===1?"SELECTED BOUNDARY":"SELECTED BOUNDARY RANGE";
@@ -274,6 +290,7 @@ function renderInspector(){
   const explanation=nodes.map((node,i)=>count===1?interpretation(node,states[start+i]):`<strong>${i+1}. ${componentPathName(node,start+i+1,logical)}:</strong> ${interpretation(node,states[start+i])}`).join(" "),evidence=matchedCoverageCase();document.querySelector("#interpretation").innerHTML=`<span>${evidence?`LAB OBSERVATION · ${evidence.id}`:"COMPONENT RULE · OUTSIDE COMPLETE MATRIX"}</span><p>${explanation}</p>`;
 }
 function renderComparisonInspector(){
+  connectionMode="compare";renderLegend("compare");
   const a=computeFor(model),b=computeFor(compareModel),start=selectedRange.start,end=selectedRange.end,aState=a.states[end+1],bState=b.states[end+1],aRows=stateRows(aState),bRows=stateRows(bState),classifiedA=classifyRows(aRows,bRows,"before"),classifiedB=classifyRows(bRows,aRows,"after"),path=a.logical.slice(start,end+2),total=a.logical.length-1,count=end-start+1,aEvidence=evidenceFor(model),bEvidence=evidenceFor(compareModel),beforePanel=document.querySelector("#before-state").closest(".state-panel"),afterPanel=document.querySelector("#after-state").closest(".state-panel");
   beforePanel.dataset.family=protocolFamily(aState.protocol);afterPanel.dataset.family=protocolFamily(bState.protocol);
   document.querySelector("#inspector-range-label").textContent="PIPELINE OUTPUT COMPARISON";
@@ -281,12 +298,12 @@ function renderComparisonInspector(){
   document.querySelector("#boundary-stepper").textContent=count===1?`${String(start+1).padStart(2,"0")} / ${String(total).padStart(2,"0")}`:`${String(start+1).padStart(2,"0")}–${String(end+1).padStart(2,"0")} / ${String(total).padStart(2,"0")}`;
   document.querySelector("#before-panel-label").textContent="PIPELINE A";document.querySelector("#after-panel-label").textContent="PIPELINE B";document.querySelector("#before-kind").textContent=`${aState.kind} · ${PROTOCOL[aState.protocol]}`;document.querySelector("#after-kind").textContent=`${bState.kind} · ${PROTOCOL[bState.protocol]}`;
   document.querySelector("#before-state").innerHTML=renderRows(classifiedA);document.querySelector("#after-state").innerHTML=renderRows(classifiedB);
-  activeConnections=connectionPairs(classifiedA,classifiedB);requestAnimationFrame(()=>requestAnimationFrame(drawFieldConnectors));
-  document.querySelector("#transform-verb").textContent="A / B diff at selected output";
+  activeConnections=connectionPairs(classifiedA,classifiedB,"compare");requestAnimationFrame(()=>requestAnimationFrame(drawFieldConnectors));
+  document.querySelector("#transform-verb").textContent="label correlation · not data flow";
   const changed=new Set([...classifiedA.filter(row=>row[2]!=="unchanged").map(row=>row[0]),...classifiedB.filter(row=>row[2]!=="unchanged").map(row=>row[0])]).size,summary=changed?`${changed} identity field${changed===1?"":"s"} differ at this output.`:"The identity fields are identical at this output.";
   document.querySelector("#interpretation").innerHTML=`<span>LAB COMPARISON · A ${aEvidence?.id||"—"} ↔ B ${bEvidence?.id||"—"}</span><p>${summary} Change protocols or configuration inside either pipeline's component cards to isolate the cause.</p>`;
 }
-function renderRows(rows,empty="No identity fields recorded here."){const labels={unchanged:"same",remapped:"remapped",derived:"new",lost:"lost"};return rows.length?rows.map(([k,v,status],index)=>`<div class="state-row diff-${status}" data-row-index="${index}"><span>${k}<em class="change-tag">${labels[status]}</em></span><b>${v??"—"}</b></div>`).join(""):`<div class="empty-state">${empty}</div>`}
+function renderRows(rows,empty="No identity fields recorded here."){const labels={unchanged:"same",remapped:"remapped",derived:connectionMode==="compare"?"only in B":"new",lost:connectionMode==="compare"?"only in A":"lost"};return rows.length?rows.map(([k,v,status,detail],index)=>`<div class="state-row diff-${status}" data-row-index="${index}"><span>${k}<em class="change-tag">${detail||labels[status]}</em></span><b>${v??"—"}</b></div>`).join(""):`<div class="empty-state">${empty}</div>`}
 function render(){renderControls();clampSelection();renderWorkbench()}
 render();
 window.addEventListener("resize",()=>requestAnimationFrame(drawFieldConnectors));

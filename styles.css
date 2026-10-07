@@ -178,6 +178,8 @@ footer{border-top:3px solid transparent;border-image:linear-gradient(90deg,var(-
 .field-link{fill:none;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
 .link-unchanged{stroke:#69737a;stroke-width:1.5;opacity:.68}
 .link-remapped{stroke:#9a7200;stroke-width:2;opacity:.78}
+.compare-field-link{stroke-dasharray:4 5;marker-end:none;opacity:.72}
+.inspector-grid.is-comparison .transform-column span{border-style:dashed;color:#59656f}
 .transform-column{position:relative;z-index:4}
 .inspector-grid.has-field-links .transform-column{justify-content:flex-end;padding-bottom:14px}
 .inspector-grid.has-field-links .transform-glyph{display:none}
