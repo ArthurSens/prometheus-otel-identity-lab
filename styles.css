@@ -44,3 +44,17 @@
 .evidence{background:#15212b;padding-top:90px;padding-bottom:90px}
 @media(max-width:1050px){.hero{grid-template-columns:1fr}.study-card{max-width:700px}.rule.feature-rule{grid-column:auto;min-height:245px}.rule-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:720px){.hero{padding-top:48px}.hero h1{font-size:42px}.rule-grid{grid-template-columns:1fr}.rule.caveat-rule{grid-column:auto}.study-card dl>div{grid-template-columns:76px 1fr}}
+
+/* Constrained pipeline editor */
+.control-help{font-size:9px;line-height:1.45;color:#737e87;margin:7px 2px 0}
+.pipeline{align-items:stretch}
+.pipe-node.composite{min-width:210px;max-width:230px;padding:14px;display:flex;flex-direction:column}
+.pipe-node.composite>label{display:grid;gap:4px;margin-top:10px;font:500 8px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:#75808a}
+.pipe-node.composite select,.pipe-node.composite input{width:100%;min-width:0;border:1px solid #d4d9dc;background:#fff;padding:7px 8px;font:400 9px var(--mono);color:#283946;text-transform:none;letter-spacing:0}
+.pipe-node.composite input:disabled{background:#f1f2ef;color:#50606b;opacity:1}
+.pipe-node.fixed-node{border-width:2px;background:#fafbf9}
+.stage-actions{display:flex;gap:4px;margin-top:auto;padding-top:12px}
+.stage-actions button{border:1px solid #d5dadd;background:#fff;padding:5px 7px;font:500 8px var(--mono);cursor:pointer}
+.stage-actions button:last-child{margin-left:auto;color:#8c3d24}
+.stage-actions button:disabled{opacity:.3;cursor:not-allowed}
+@media(max-width:720px){.pipe-node.composite{min-width:195px}.component-list{grid-template-columns:1fr}}

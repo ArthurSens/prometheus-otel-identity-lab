@@ -18,4 +18,4 @@ Open `http://localhost:4173`.
 - Included: `job`, `instance`, OTel resource identity, and `target_info`
 - Excluded: metric names/types, scope data, histograms, timestamps, temporality, exemplars, and HELP/TYPE/UNIT
 
-The UI does not invent results for arbitrary chains. Any adjacency not present in the Lab report is explicitly marked unsupported.
+The workbench uses a constrained topology: the OTel SDK source and final Prometheus server are fixed, optional stages are inserted between them, and each Collector is represented as a receiver/exporter pair. Receivers and Prometheus ingestion modes follow the adjacent protocol automatically; exporters remain switchable. Custom topologies are marked as structurally valid but not run end-to-end.

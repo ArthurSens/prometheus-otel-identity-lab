@@ -1,99 +1,181 @@
-const COMPONENTS={
-  sdkOtel:{name:"OTel SDK resource",short:"SDK resource",family:"otel",kind:"OTLP",note:"payments / checkout / sdk-1"},
-  sdkProm:{name:"SDK Prometheus page",short:"SDK Prom page",family:"prom",kind:"Exposition",note:"target_info carries service_*"},
-  promScrape:{name:"Prometheus scrape",short:"Prom scrape",family:"prom",kind:"Scrape",note:"assigns target identity"},
-  promReceiver:{name:"Collector Prometheus receiver",short:"Prom receiver",family:"otel",kind:"Receiver",note:"reconstructs resource"},
-  promExporter:{name:"Collector Prometheus exporter",short:"Prom exporter",family:"prom",kind:"Exporter",note:"derives job / instance"},
-  otlpTransport:{name:"OTLP transport",short:"OTLP transport",family:"otel",kind:"Transport",note:"preserves resource"},
-  rw2Transport:{name:"Remote Write 2.0",short:"RW 2.0",family:"prom",kind:"Transport",note:"transports label sets"},
-  rwReceiver:{name:"Collector RW receiver",short:"RW receiver",family:"otel",kind:"Receiver",note:"reconstructs resource"},
-  nativeOtlp:{name:"Prometheus native OTLP",short:"Native OTLP",family:"prom",kind:"Ingestion",note:"derives stored identity"},
-  promStorage:{name:"Prometheus storage",short:"Prom storage",family:"prom",kind:"Storage",note:"queryable label sets"},
-  otlpSink:{name:"Collector OTLP sink",short:"OTLP sink",family:"otel",kind:"Sink",note:"structured resource"}
-};
-
 const PRESETS=[
-  {id:"p1",label:"01 · direct SDK scrape",chain:["sdkProm","promScrape","promStorage"]},
-  {id:"p2",label:"02 · Prom receiver → OTLP",chain:["sdkProm","promReceiver","otlpTransport","otlpSink"]},
-  {id:"p3",label:"03 · Prom round trip",chain:["sdkProm","promReceiver","promExporter","promScrape","promStorage"]},
-  {id:"p4",label:"04 · OTLP → Prom exporter",chain:["sdkOtel","otlpTransport","promExporter","promScrape","promStorage"]},
-  {id:"p5",label:"05 · pull → RW2",chain:["sdkOtel","promExporter","promScrape","promStorage","rw2Transport","promStorage"]},
-  {id:"p6",label:"06 · direct Collector RW2",chain:["sdkOtel","otlpTransport","rw2Transport","promStorage"]},
-  {id:"p7",label:"07 · Prom → RW receiver",chain:["sdkProm","promScrape","promStorage","rw2Transport","rwReceiver","otlpTransport","otlpSink"]},
-  {id:"p8",label:"08 · honor_labels control",chain:["sdkProm","promScrape","promStorage"]},
-  {id:"p9",label:"09 · translation strategies",chain:["sdkOtel","promExporter","promScrape","promStorage"]},
-  {id:"p10",label:"10 · native OTLP",chain:["sdkOtel","nativeOtlp","promStorage"]}
+  {id:"p1",label:"01 · direct SDK scrape",source:"prom",stages:[],config:{honorLabels:false}},
+  {id:"p3",label:"03 · Prom receiver round trip",source:"prom",stages:[{type:"collector",exporter:"prom"}],config:{honorLabels:true}},
+  {id:"p4",label:"04 · OTLP → Prom exporter",source:"otlp",stages:[{type:"collector",exporter:"prom"}],config:{honorLabels:true}},
+  {id:"p5",label:"05 · pull → RW2",source:"otlp",stages:[{type:"collector",exporter:"prom"},{type:"promRelay"}],config:{honorLabels:true}},
+  {id:"p6",label:"06 · direct Collector RW2",source:"otlp",stages:[{type:"collector",exporter:"rw2"}],config:{}},
+  {id:"p8",label:"08 · honor_labels control",source:"prom",stages:[],config:{honorLabels:false}},
+  {id:"p9",label:"09 · translation strategies",source:"otlp",stages:[{type:"collector",exporter:"prom"}],config:{honorLabels:false}},
+  {id:"p10",label:"10 · native OTLP",source:"otlp",stages:[{type:"collector",exporter:"otlp"}],config:{keepIdentifying:false}}
 ];
 
-const states={
-  sdkOtel:{kind:"OTel resource",rows:[["service.namespace","payments"],["service.name","checkout"],["service.instance.id","sdk-1"],["deployment.environment.name","lab"],["resource.custom","resource-value"]]},
-  sdkProm:{kind:"Prometheus exposition",rows:[["ordinary metric job","—"],["ordinary metric instance","—"],["target_info service_name","checkout"],["target_info service_namespace","payments"],["target_info service_instance_id","sdk-1"]]}
-};
+const PROTOCOL={otlp:"OTLP",prom:"Prometheus exposition",rw2:"Remote Write 2.0",storage:"stored series"};
+const EXPORTER={otlp:"OTLP exporter",prom:"Prometheus exporter",rw2:"Remote Write 2.0 exporter"};
+const INGEST={otlp:"native OTLP receiver",prom:"scrape",rw2:"Remote Write 2.0 receiver"};
+const RECEIVER={otlp:"OTLP receiver",prom:"Prometheus receiver",rw2:"Remote Write 2.0 receiver"};
 
-const edge=(verb,after,why)=>({verb,after,why});
-function edgeResult(a,b,index){
-  const honor=config.honorLabels,keep=config.keepIdentifying,strategy=config.translation;
-  if(a==="sdkProm"&&b==="promScrape") return edge("scrape assigns",{kind:"Prometheus series",rows:[["job",honor&&activePreset==="p8"?"sdk-metric-job":"path1-direct"],["instance",honor&&activePreset==="p8"?"sdk-metric-instance":"sdk-app:9464"],...(activePreset==="p8"&&!honor?[["exported_job","sdk-metric-job"],["exported_instance","sdk-metric-instance"]]:[]),["target_info","present · original service_* retained"]]},honor&&activePreset==="p8"?"The collision probe already supplied job and instance, so honor_labels=true kept the incoming pair.":activePreset==="p8"?"The target pair won the collision; the source pair moved to exported_job and exported_instance.":"The ordinary SDK metric had no job or instance. The scrape therefore assigned its configured target identity.");
-  if(a==="sdkProm"&&b==="promReceiver") return edge("receiver reconstructs",{kind:"OTel resource",rows:[["service.name",activePreset==="p3"?"path3-prom-receiver":"path2-prom-receiver"],["service.instance.id","sdk-app:9464"],["service_name","checkout"],["service_namespace","payments"],["service_instance_id","sdk-1"],["target_info metric","consumed"]]},"The receiver promoted scrape-target job and instance to primary resource identity, then consumed target_info into normalized underscore attributes.");
-  if((a==="sdkOtel"||a==="otlpTransport")&&b==="promExporter") return edge("exporter derives",{kind:"Prometheus exposition",rows:[["job","payments/checkout"],["instance","sdk-1"],["target_info service_*","not duplicated"],["target_info other attrs","deployment_environment_name · resource_custom"],["translation strategy",strategy+" · identity unchanged"]]},"The exporter projected semantic service identity into job and instance. Across the three tested translation strategies, that identity mapping did not change.");
-  if(a==="promReceiver"&&b==="promExporter") return edge("exporter derives",{kind:"Prometheus exposition",rows:[["job","path3-prom-receiver"],["instance","sdk-app:9464"],["target_info service_name","checkout"],["target_info service_namespace","payments"],["target_info service_instance_id","sdk-1"]]},"The exporter used the receiver-reconstructed resource for job and instance, while the original SDK identity reappeared as labels on a newly created target_info series.");
-  if(a==="promExporter"&&b==="promScrape") return edge(honor?"scrape preserves":"scrape overrides",{kind:"Scrape output",rows:honor?[["job",activePreset==="p3"?"path3-prom-receiver":"payments/checkout"],["instance",activePreset==="p3"?"sdk-app:9464":"sdk-1"],["target_info","present"]]:[["job",activePreset==="p9"?`path9-${strategyKey(strategy)}`:"scrape-job"],["instance",activePreset==="p9"?`collector:${strategyPort(strategy)}`:"exporter:port"],["exported_job",activePreset==="p3"?"path3-prom-receiver":"payments/checkout"],["exported_instance",activePreset==="p3"?"sdk-app:9464":"sdk-1"]]},honor?"With honor_labels=true, the exporter-provided identity remained attached to both the ordinary series and target_info.":"With honor_labels=false, the configured scrape target won. The exporter identity survived only as exported_job and exported_instance.");
-  if(a==="promScrape"&&b==="promStorage") return edge("storage retains",withKind(stateAt(index-1),"Prometheus storage"),"Prometheus stored the label set produced by the scrape. Storage did not reinterpret the identity in this observed path.");
-  if(a==="promStorage"&&b==="rw2Transport") return edge("RW2 transports",withKind(stateAt(index-1),"Remote Write series"),"Remote Write 2.0 transported the ordinary series and target_info label sets without reinterpreting job or instance.");
-  if((a==="otlpTransport"||a==="sdkOtel")&&b==="rw2Transport") return edge("RW2 exporter derives",{kind:"Remote Write series",rows:[["job","payments/checkout"],["instance","sdk-1"],["target_info","present"],["target_info other attrs","deployment_environment_name · resource_custom"]]},"The Collector Remote Write 2.0 exporter projected the OTel service identity into Prometheus labels and emitted target_info for remaining resource attributes.");
-  if(a==="rw2Transport"&&b==="promStorage") return edge("storage retains",{kind:"Prometheus storage",rows:[["job","payments/checkout"],["instance","sdk-1"],["target_info","present"],["lab_path",activePreset==="p5"?"path5":"path6"]]},"The destination Prometheus retained both the ordinary series and target_info. This is the corrected clean-rerun result for both RW2 routes.");
-  if(a==="rw2Transport"&&b==="rwReceiver") return edge("receiver reconstructs",{kind:"OTel resource",rows:[["service.name","path7-source"],["service.instance.id","sdk-app:9464"],["service_name","checkout"],["service_namespace","payments"],["service_instance_id","sdk-1"],["target_info metric","consumed"]]},"The Remote Write receiver treated surviving Prometheus job and instance as primary service identity and recovered the original SDK identity from target_info.");
-  if((a==="promReceiver"||a==="rwReceiver"||a==="sdkOtel")&&b==="otlpTransport") return edge("OTLP preserves",stateAt(index-1),"Across the observed Collector OTLP hop, resource identity did not change.");
-  if(a==="otlpTransport"&&b==="otlpSink") return edge("sink observes",withKind(stateAt(index-1),"OTel resource at sink"),"The final OTLP checkpoint preserved the structured resource received over the OTLP hop.");
-  if(a==="sdkOtel"&&b==="nativeOtlp") return edge("ingestion derives",{kind:"Prometheus storage",rows:[["job","payments/checkout"],["instance","sdk-1"],["target_info service_name",keep?"checkout":"omitted"],["target_info service_namespace",keep?"payments":"omitted"],["target_info service_instance_id",keep?"sdk-1":"omitted"],["target_info other attrs","deployment_environment_name · resource_custom"]]},"Both settings derived the same job and instance. keep_identifying_resource_attributes only controlled whether the three identifying resource attributes were repeated on target_info.");
-  if(a==="nativeOtlp"&&b==="promStorage") return edge("storage exposes",withKind(stateAt(index-1),"Prometheus storage"),"The API-observed stored identity matched the native OTLP ingestion result.");
-  return null;
-}
-
-let chain=[...PRESETS[3].chain],activePreset="p4",selectedBoundary=1;
+let model={source:"otlp",stages:[{type:"collector",exporter:"prom"}]};
 let config={honorLabels:true,keepIdentifying:false,translation:"Underscore + suffixes"};
+let activePreset="p4",selectedBoundary=0;
+
+const clone=value=>JSON.parse(JSON.stringify(value));
+function selectPreset(id){
+  const p=PRESETS.find(x=>x.id===id);
+  model={source:p.source,stages:clone(p.stages)};
+  config={honorLabels:true,keepIdentifying:false,translation:"Underscore + suffixes",...p.config};
+  activePreset=id;selectedBoundary=0;render();
+}
+function markCustom(){activePreset="custom"}
+function outputOfStage(stage){return stage.type==="collector"?stage.exporter:"rw2"}
+function inputProtocolAt(stageIndex){let p=model.source;for(let i=0;i<stageIndex;i++)p=outputOfStage(model.stages[i]);return p}
+function finalInputProtocol(){return model.stages.length?outputOfStage(model.stages.at(-1)):model.source}
 function strategyKey(v){return v.startsWith("Underscore")?"underscore":v.startsWith("UTF")?"utf8-suffixes":"no-translation"}
 function strategyPort(v){return v.startsWith("Underscore")?"9471":v.startsWith("UTF")?"9472":"9473"}
-function stateAt(index){if(index<=0)return states[chain[0]]||{kind:COMPONENTS[chain[0]].kind,rows:[]};const result=edgeResult(chain[index-1],chain[index],index);return result?result.after:{kind:"Not covered",rows:[]}}
-function withKind(state,kind){return {...state,kind}}
+
+function initialState(){
+  if(model.source==="otlp") return {protocol:"otlp",kind:"OTel resource",resource:{"service.namespace":"payments","service.name":"checkout","service.instance.id":"sdk-1","deployment.environment.name":"lab","resource.custom":"resource-value"},labels:null,targetInfo:null};
+  return {protocol:"prom",kind:"Prometheus exposition",resource:null,labels:{job:null,instance:null},targetInfo:{service_name:"checkout",service_namespace:"payments",service_instance_id:"sdk-1",deployment_environment_name:"lab",resource_custom:"resource-value"}};
+}
+function receiverIdentity(input){
+  if(input.labels?.job) return {job:input.labels.job,instance:input.labels.instance};
+  if(activePreset==="p3") return {job:"path3-prom-receiver",instance:"sdk-app:9464"};
+  return {job:"configured receiver job_name",instance:"configured scrape target"};
+}
+function receiveResource(input){
+  if(input.protocol==="otlp") return clone(input.resource||{});
+  const identity=receiverIdentity(input);
+  const resource={"service.name":identity.job,"service.instance.id":identity.instance};
+  for(const [k,v] of Object.entries(input.targetInfo||{})) resource[k]=v;
+  return resource;
+}
+function projectResource(resource,protocol){
+  const semanticName=resource["service.name"];
+  const namespace=resource["service.namespace"];
+  const job=namespace?`${namespace}/${semanticName}`:semanticName;
+  const instance=resource["service.instance.id"];
+  const targetInfo={};
+  for(const [k,v] of Object.entries(resource)){
+    if(["service.name","service.namespace","service.instance.id"].includes(k))continue;
+    targetInfo[k.replaceAll(".","_")]=v;
+  }
+  return {protocol,kind:protocol==="rw2"?"Remote Write series":"Prometheus exposition",resource:null,labels:{job,instance},targetInfo};
+}
+function applyCollector(input,stage){
+  const resource=receiveResource(input);
+  if(stage.exporter==="otlp") return {protocol:"otlp",kind:"OTel resource",resource,labels:null,targetInfo:null};
+  return projectResource(resource,stage.exporter);
+}
+function scrapeTarget(context){
+  if(activePreset==="p1")return {job:"path1-direct",instance:"sdk-app:9464"};
+  if(activePreset==="p8")return {job:"path8-prom-false",instance:"sdk-app:9464"};
+  if(activePreset==="p9")return {job:`path9-${strategyKey(config.translation)}`,instance:`collector:${strategyPort(config.translation)}`};
+  if(context==="relay"&&activePreset==="p5")return {job:"path5-origin",instance:"collector:port"};
+  return {job:"configured job_name",instance:"configured scrape target"};
+}
+function ingestPrometheus(input,context,isFinal){
+  let stored;
+  if(input.protocol==="otlp"){
+    stored=projectResource(input.resource||{},"prom");
+    if(config.keepIdentifying){
+      const r=input.resource||{};
+      if(r["service.name"])stored.targetInfo.service_name=r["service.name"];
+      if(r["service.namespace"])stored.targetInfo.service_namespace=r["service.namespace"];
+      if(r["service.instance.id"])stored.targetInfo.service_instance_id=r["service.instance.id"];
+    }
+  }else if(input.protocol==="rw2") stored=clone(input);
+  else{
+    stored=clone(input);const incoming=stored.labels||{};const target=scrapeTarget(context);
+    if(!incoming.job)stored.labels={job:target.job,instance:target.instance};
+    else if(!config.honorLabels)stored.labels={job:target.job,instance:target.instance,exported_job:incoming.job,exported_instance:incoming.instance};
+  }
+  stored.protocol=isFinal?"storage":"rw2";
+  stored.kind=isFinal?"Prometheus storage":"Prometheus storage → Remote Write 2.0";
+  return stored;
+}
+function compute(){
+  const logical=[{type:"source"},...model.stages,{type:"final"}];
+  const states=[initialState()];let state=states[0];
+  model.stages.forEach(stage=>{state=stage.type==="collector"?applyCollector(state,stage):ingestPrometheus(state,"relay",false);states.push(state)});
+  state=ingestPrometheus(state,"final",true);states.push(state);
+  return {logical,states};
+}
+function stateRows(state){
+  const rows=[];
+  if(state.resource)for(const [k,v] of Object.entries(state.resource))rows.push([k,v]);
+  if(state.labels)for(const [k,v] of Object.entries(state.labels))if(v)rows.push([k,v]);
+  if(state.targetInfo){
+    const entries=Object.entries(state.targetInfo);rows.push(["target_info",entries.length?"present":"present · no additional labels"]);
+    for(const [k,v] of entries)rows.push([`target_info.${k}`,v]);
+  }
+  return rows;
+}
+function nodeAction(node,input){
+  if(node.type==="collector")return `${RECEIVER[input.protocol]} → ${EXPORTER[node.exporter]}`;
+  if(node.type==="promRelay")return `${INGEST[input.protocol]} → Remote Write 2.0`;
+  return `${INGEST[input.protocol]} → storage`;
+}
+function interpretation(node,input){
+  if(node.type==="collector"){
+    const receive=input.protocol==="otlp"?"The OTLP receiver preserves structured resource identity.":`The ${RECEIVER[input.protocol]} reconstructs primary resource identity from the surviving job and instance, and consumes target_info into resource attributes.`;
+    const send=node.exporter==="otlp"?"The OTLP exporter keeps that resource structured.":`The ${EXPORTER[node.exporter]} projects the resulting resource back into job, instance, and target_info.`;
+    return `${receive} ${send}`;
+  }
+  if(input.protocol==="prom")return config.honorLabels?"The scrape honors incoming job and instance when they exist; otherwise it assigns configured target identity.":"The scrape target wins job and instance collisions; incoming values survive as exported_job and exported_instance.";
+  if(input.protocol==="otlp")return "Prometheus native OTLP ingestion derives job and instance from service identity. keep_identifying_resource_attributes only controls duplication on target_info.";
+  return "Remote Write 2.0 transports the existing Prometheus label set without reinterpreting job or instance.";
+}
 
 function renderControls(){
-  document.querySelector("#preset-list").innerHTML=PRESETS.map(p=>`<button class="preset-button ${activePreset===p.id?"active":""}" data-preset="${p.id}">${p.label}<small>${p.chain.length} nodes</small></button>`).join("");
-  const addable=["promReceiver","promExporter","promScrape","otlpTransport","rw2Transport","rwReceiver","nativeOtlp","promStorage","otlpSink"];
-  document.querySelector("#component-list").innerHTML=addable.map(id=>`<button class="component-button" data-add="${id}">${COMPONENTS[id].short}</button>`).join("");
+  document.querySelector("#preset-list").innerHTML=PRESETS.map(p=>`<button class="preset-button ${activePreset===p.id?"active":""}" data-preset="${p.id}">${p.label}<small>${p.stages.length+2} roles</small></button>`).join("");
+  document.querySelector("#component-list").innerHTML=`<button class="component-button" data-add="collector">Add Collector</button><button class="component-button" data-add="promRelay">Add Prometheus relay</button><p class="control-help">Stages are inserted before the fixed final Prometheus server. Protocol-compatible receivers are selected automatically.</p>`;
   document.querySelector("#config-controls").innerHTML=`
     <div class="config-row"><label>honor_labels <span class="switch"><input id="honor" type="checkbox" ${config.honorLabels?"checked":""}><i></i></span></label></div>
     <div class="config-row"><label>keep identifying resource attrs <span class="switch"><input id="keep" type="checkbox" ${config.keepIdentifying?"checked":""}><i></i></span></label></div>
     <div class="config-row"><label for="translation">translation_strategy</label><select id="translation"><option ${config.translation==="Underscore + suffixes"?"selected":""}>Underscore + suffixes</option><option ${config.translation==="UTF-8 + suffixes"?"selected":""}>UTF-8 + suffixes</option><option ${config.translation==="No translation"?"selected":""}>No translation</option></select></div>`;
   document.querySelectorAll("[data-preset]").forEach(b=>b.onclick=()=>selectPreset(b.dataset.preset));
-  document.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{chain.push(b.dataset.add);activePreset="custom";selectedBoundary=Math.max(0,chain.length-2);render()});
-  document.querySelector("#honor").onchange=e=>{config.honorLabels=e.target.checked;renderWorkbench()};
-  document.querySelector("#keep").onchange=e=>{config.keepIdentifying=e.target.checked;renderWorkbench()};
-  document.querySelector("#translation").onchange=e=>{config.translation=e.target.value;renderWorkbench()};
+  document.querySelector('[data-add="collector"]').onclick=()=>{model.stages.push({type:"collector",exporter:"otlp"});markCustom();selectedBoundary=model.stages.length-1;render()};
+  document.querySelector('[data-add="promRelay"]').onclick=()=>{model.stages.push({type:"promRelay"});markCustom();selectedBoundary=model.stages.length-1;render()};
+  document.querySelector("#honor").onchange=e=>{config.honorLabels=e.target.checked;if(!["p8","p9"].includes(activePreset))markCustom();renderWorkbench()};
+  document.querySelector("#keep").onchange=e=>{config.keepIdentifying=e.target.checked;if(activePreset!=="p10")markCustom();renderWorkbench()};
+  document.querySelector("#translation").onchange=e=>{config.translation=e.target.value;if(activePreset!=="p9")markCustom();renderWorkbench()};
 }
-function selectPreset(id){const p=PRESETS.find(x=>x.id===id);activePreset=id;chain=[...p.chain];selectedBoundary=Math.min(1,chain.length-2);if(["p1","p8","p9"].includes(id))config.honorLabels=false;else config.honorLabels=true;render()}
+function sourceNode(){return `<div class="pipe-node composite fixed-node" data-family="otel"><span class="node-kind">Fixed source</span><b>OpenTelemetry SDK</b><label>output<select data-source-output><option value="otlp" ${model.source==="otlp"?"selected":""}>OTLP exporter</option><option value="prom" ${model.source==="prom"?"selected":""}>Prometheus exporter</option></select></label><small>Semantic resource: payments / checkout / sdk-1</small></div>`}
+function stageNode(stage,i){
+  const input=inputProtocolAt(i);
+  if(stage.type==="collector")return `<div class="pipe-node composite" data-family="otel"><span class="node-kind">Collector ${i+1}</span><b>OpenTelemetry Collector</b><label>receiver<input value="${RECEIVER[input]}" disabled></label><label>exporter<select data-exporter="${i}"><option value="otlp" ${stage.exporter==="otlp"?"selected":""}>OTLP exporter</option><option value="prom" ${stage.exporter==="prom"?"selected":""}>Prometheus exporter</option><option value="rw2" ${stage.exporter==="rw2"?"selected":""}>RW 2.0 exporter</option></select></label>${stageButtons(i)}</div>`;
+  return `<div class="pipe-node composite" data-family="prom"><span class="node-kind">Intermediate server</span><b>Prometheus relay</b><label>ingestion<input value="${INGEST[input]}" disabled></label><label>output<input value="Remote Write 2.0" disabled></label>${stageButtons(i)}</div>`;
+}
+function stageButtons(i){return `<div class="stage-actions"><button data-move-left="${i}" ${i===0?"disabled":""} aria-label="Move stage left">←</button><button data-move-right="${i}" ${i===model.stages.length-1?"disabled":""} aria-label="Move stage right">→</button><button data-remove-stage="${i}" aria-label="Remove stage">Remove</button></div>`}
+function finalNode(){const input=finalInputProtocol();return `<div class="pipe-node composite fixed-node" data-family="prom"><span class="node-kind">Fixed destination</span><b>Prometheus server</b><label>ingestion<input value="${INGEST[input]}" disabled></label><small>Final queryable storage · cannot be removed</small></div>`}
 function renderWorkbench(){
-  const pipe=document.querySelector("#pipeline");
-  pipe.innerHTML=chain.map((id,i)=>`${i?`<button class="pipe-arrow ${selectedBoundary===i-1?"active":""}" data-boundary="${i-1}" aria-label="Inspect boundary ${i}"></button>`:""}<div class="pipe-node" data-family="${COMPONENTS[id].family}"><span class="node-kind">${COMPONENTS[id].kind}</span><b>${COMPONENTS[id].short}</b><small>${COMPONENTS[id].note}</small><button class="remove-node" data-remove="${i}" aria-label="Remove ${COMPONENTS[id].short}">×</button></div>`).join("");
+  const parts=[sourceNode()];
+  model.stages.forEach((s,i)=>{parts.push(`<button class="pipe-arrow ${selectedBoundary===i?"active":""}" data-boundary="${i}" aria-label="Inspect boundary ${i+1}"></button>`);parts.push(stageNode(s,i))});
+  const finalBoundary=model.stages.length;parts.push(`<button class="pipe-arrow ${selectedBoundary===finalBoundary?"active":""}" data-boundary="${finalBoundary}" aria-label="Inspect final boundary"></button>`);parts.push(finalNode());
+  document.querySelector("#pipeline").innerHTML=parts.join("");
+  document.querySelector("[data-source-output]").onchange=e=>{model.source=e.target.value;markCustom();render()};
+  document.querySelectorAll("[data-exporter]").forEach(el=>el.onchange=e=>{model.stages[+e.target.dataset.exporter].exporter=e.target.value;markCustom();render()});
   document.querySelectorAll("[data-boundary]").forEach(b=>b.onclick=()=>{selectedBoundary=+b.dataset.boundary;renderWorkbench()});
-  document.querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>{chain.splice(+b.dataset.remove,1);activePreset="custom";selectedBoundary=Math.max(0,Math.min(selectedBoundary,chain.length-2));render()});
-  let coverage=true;for(let i=0;i<chain.length-1;i++)if(!edgeResult(chain[i],chain[i+1],i+1))coverage=false;
-  const status=document.querySelector("#coverage-status");status.textContent=coverage?"FULLY COVERED BY RERUN":"PARTIAL / UNSUPPORTED";status.style.background=coverage?"#e7f5f2":"#fff2ea";status.style.color=coverage?"#087368":"#8b3b12";
-  const banner=document.querySelector("#unsupported-banner");banner.hidden=coverage;banner.textContent="At least one transition was not exercised by the Lab report. Unsupported boundaries are not simulated; select their arrows to see the gap.";
+  document.querySelectorAll("[data-remove-stage]").forEach(b=>b.onclick=()=>{model.stages.splice(+b.dataset.removeStage,1);markCustom();selectedBoundary=Math.min(selectedBoundary,model.stages.length);render()});
+  document.querySelectorAll("[data-move-left]").forEach(b=>b.onclick=()=>moveStage(+b.dataset.moveLeft,-1));
+  document.querySelectorAll("[data-move-right]").forEach(b=>b.onclick=()=>moveStage(+b.dataset.moveRight,1));
+  const exact=activePreset!=="custom";const status=document.querySelector("#coverage-status");
+  status.textContent=exact?"TESTED ROUTE":"VALID TOPOLOGY · NOT RUN END-TO-END";status.style.background=exact?"#e7f5f2":"#fff6dc";status.style.color=exact?"#087368":"#775d00";
+  const banner=document.querySelector("#unsupported-banner");banner.hidden=exact;banner.textContent="This topology is protocol-valid. Its complete composition was not run in the Lab; the inspector applies component-level rules observed elsewhere in the matrix.";
   renderInspector();
 }
+function moveStage(i,delta){const j=i+delta;if(j<0||j>=model.stages.length)return;[model.stages[i],model.stages[j]]=[model.stages[j],model.stages[i]];markCustom();render()}
 function renderInspector(){
-  if(chain.length<2){document.querySelector("#inspector-title").textContent="Add another component";return}
-  const a=chain[selectedBoundary],b=chain[selectedBoundary+1],r=edgeResult(a,b,selectedBoundary+1),before=stateAt(selectedBoundary);
-  document.querySelector("#inspector-title").textContent=`${COMPONENTS[a].short} → ${COMPONENTS[b].short}`;
-  document.querySelector("#boundary-stepper").textContent=`${String(selectedBoundary+1).padStart(2,"0")} / ${String(chain.length-1).padStart(2,"0")}`;
-  document.querySelector("#before-kind").textContent=before.kind;
-  document.querySelector("#before-state").innerHTML=renderRows(before.rows);
-  document.querySelector("#after-kind").textContent=r?r.after.kind:"NOT COVERED";
-  document.querySelector("#after-state").innerHTML=r?renderRows(r.after.rows):`<div class="empty-state">This component transition was not part of the experiment. No result is inferred.</div>`;
-  document.querySelector("#transform-verb").textContent=r?r.verb:"no evidence";
-  document.querySelector("#interpretation").innerHTML=`<span>${r?"WHY IT CHANGED":"EVIDENCE GAP"}</span><p>${r?r.why:"The Lab report does not contain this adjacency. Choose a tested route or treat this as a proposal for a new experiment."}</p>`;
+  const {logical,states}=compute();const before=states[selectedBoundary],after=states[selectedBoundary+1],node=logical[selectedBoundary+1];
+  const from=logical[selectedBoundary];const fromName=from.type==="source"?"OTel SDK":from.type==="collector"?"Collector":"Prometheus relay";
+  const toName=node.type==="collector"?"Collector":node.type==="promRelay"?"Prometheus relay":"Prometheus server";
+  document.querySelector("#inspector-title").textContent=`${fromName} → ${toName}`;
+  document.querySelector("#boundary-stepper").textContent=`${String(selectedBoundary+1).padStart(2,"0")} / ${String(logical.length-1).padStart(2,"0")}`;
+  document.querySelector("#before-kind").textContent=`${before.kind} · ${PROTOCOL[before.protocol]}`;
+  document.querySelector("#after-kind").textContent=`${after.kind} · ${PROTOCOL[after.protocol]}`;
+  document.querySelector("#before-state").innerHTML=renderRows(stateRows(before));document.querySelector("#after-state").innerHTML=renderRows(stateRows(after));
+  document.querySelector("#transform-verb").textContent=nodeAction(node,before);
+  document.querySelector("#interpretation").innerHTML=`<span>${activePreset==="custom"?"COMPONENT RULE · COMPOSITION NOT RUN":"WHY IT CHANGED"}</span><p>${interpretation(node,before)}</p>`;
 }
-function renderRows(rows=[]){return rows.length?rows.map(([k,v])=>`<div class="state-row"><span>${k}</span><b>${v}</b></div>`).join(""):`<div class="empty-state">No identity fields recorded here.</div>`}
-function render(){renderControls();renderWorkbench()}
+function renderRows(rows){return rows.length?rows.map(([k,v])=>`<div class="state-row"><span>${k}</span><b>${v??"—"}</b></div>`).join(""):`<div class="empty-state">No identity fields recorded here.</div>`}
+function render(){renderControls();selectedBoundary=Math.min(selectedBoundary,model.stages.length);renderWorkbench()}
 render();

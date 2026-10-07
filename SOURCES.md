@@ -10,7 +10,7 @@
 
 ## Implementation policy
 
-The interactive composer encodes only transformations directly supported by the clean Lab rerun. When visitors create an untested adjacency, the UI says that the transition is not covered and does not calculate an outcome.
+The interactive composer prevents disconnected or role-invalid chains. The OTel SDK and final Prometheus server are fixed; Collector receivers are selected from their incoming protocol; Collector exporters are user-selectable; and optional relay servers always forward through Remote Write 2.0. Custom complete compositions are labeled as not run end-to-end, while their boundary explanations reuse only component rules observed in the clean Lab rerun.
 
 ## Version and scope
 
