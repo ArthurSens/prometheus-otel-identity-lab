@@ -9,6 +9,14 @@ const PROTOCOL={otlp:"OTLP",prom:"Prometheus exposition",rw2:"Remote Write 2.0",
 const EXPORTER={otlp:"OTLP exporter",prom:"Prometheus exporter",rw2:"Remote Write 2.0 exporter"};
 const INGEST={otlp:"native OTLP receiver",prom:"scrape",rw2:"Remote Write 2.0 receiver"};
 const RECEIVER={otlp:"OTLP receiver",prom:"Prometheus receiver",rw2:"Remote Write 2.0 receiver"};
+const ALTERNATIVES_URL="experiments/complete-36/predicted/alternative-variants.json";
+const VARIANT_OPTIONS=[
+  ["current","Current · measured"],
+  ["B","Option B · scrape pair first"],
+  ["C","Option C · declared service first"],
+  ["C1","Option C.1 · no underscore recognition"],
+  ["E","Option E · resource ID (symbolic)"]
+];
 
 // Exact route tuples from the Lab's original 36-case coverage manifest. The
 // Lab's 22 dotted-source twins are derived below from their recorded pairs.
@@ -62,10 +70,14 @@ let selectedRange={start:0,end:0};
 let compareSelections={a:0,b:0};
 let activeConnections=[];
 let connectionMode="trace";
+let alternatives=null;
+let alternativesIndex=new Map();
+let variantOptions={a:"current",b:"current"};
+let variantDerivations={a:"default-derive",b:"default-derive"};
 const clone=value=>JSON.parse(JSON.stringify(value));
 function usingModel(target,callback){const previous=model;model=target;try{return callback()}finally{model=previous}}
 function evidenceFor(target){return usingModel(target,()=>matchedCoverageCase())}
-function computeFor(target){return usingModel(target,()=>compute())}
+function computeFor(target,lane="a"){return usingModel(target,()=>computeVariant(lane))}
 function outputOfStage(stage){return stage.exporter}
 function inputProtocolAt(stageIndex){let p=model.source;for(let i=0;i<stageIndex;i++)p=outputOfStage(model.stages[i]);return p}
 function finalInputProtocol(){return model.stages.length?outputOfStage(model.stages.at(-1)):model.source}
@@ -146,6 +158,93 @@ function compute(){
   const logical=[{type:"source"},...model.stages,{type:"final",...model.final}],states=[initialState()];let state=states[0];
   model.stages.forEach(stage=>{state=applyCollector(state,stage);states.push(state)});
   state=ingestPrometheus(state,model.final,"final",true);states.push(state);return {logical,states};
+}
+function profileIdForLane(lane){
+  const option=variantOptions[lane];
+  if(option==="current")return null;
+  if(option==="B")return "B";
+  if(option==="E")return "E-symbolic";
+  return `${option}-${variantDerivations[lane]}`;
+}
+function predictionForLane(lane){
+  const evidence=matchedCoverageCase(),profileId=profileIdForLane(lane);
+  return evidence&&profileId?alternativesIndex.get(`${evidence.id}|${profileId}`)||null:null;
+}
+function variantStatus(lane,prediction=predictionForLane(lane)){
+  if(variantOptions[lane]==="current")return {label:"CURRENT · MEASURED",confidence:"measured"};
+  if(!alternatives)return {label:"LOADING PREDICTIONS",confidence:"loading"};
+  if(alternatives.error)return {label:"PREDICTIONS UNAVAILABLE",confidence:"missing"};
+  if(!prediction)return {label:"NO PREDICTION",confidence:"missing"};
+  if(prediction.confidence==="measured")return {label:`${variantOptions[lane]} · UNAFFECTED / MEASURED`,confidence:"measured"};
+  if(prediction.confidence==="symbolic")return {label:`${variantOptions[lane]} · SYMBOLIC`,confidence:"symbolic"};
+  return {label:`${variantOptions[lane].replace("C1","C.1")} · SPECIFICATION-PREDICTED`,confidence:"conditional"};
+}
+function variantEvidenceLabel(result,evidence){
+  const variant=result.variant;
+  if(variant.option==="current")return evidence?`LAB OBSERVATION · ${evidence.id}`:"COMPONENT RULE · OUTSIDE COMPLETE MATRIX";
+  if(!variant.prediction)return `NO PREDICTION · ${evidence?.id||"NO EXACT CASE"}`;
+  if(variant.prediction.confidence==="measured")return `UNAFFECTED / MEASURED · ${evidence.id} · OPTION ${variant.option}`;
+  if(variant.prediction.confidence==="symbolic")return `SYMBOLIC DESIGN · ${evidence.id} · OPTION E`;
+  return `SPECIFICATION-PREDICTED · ${evidence.id} · ${variant.profileId.replace("C1","C.1").replace("-default-derive"," · current derivation").replace("-never-derive"," · never derive")}`;
+}
+function variantNarrative(result){
+  const prediction=result.variant.prediction;
+  if(result.variant.option==="current")return "";
+  if(!prediction)return " No counterfactual row is available for this pipeline tuple.";
+  if(prediction.confidence==="measured")return " This path is outside the proposal's affected surface, so the measured result is unchanged.";
+  if(prediction.confidence==="symbolic")return " Option E proposes a stable resource join key, but its synthesis and output-label policy are unresolved; exact job and instance values are intentionally not invented.";
+  const receiver=prediction.collector_resources?.[0],authority=receiver?.identity_authority?` The proposal selects ${receiver.identity_authority} as identity authority.`:"";
+  const masked=prediction.predicted_final?.upstream_preserved_as?" The final scrape target masks that upstream identity; the proposal result remains visible as exported_job and exported_instance.":"";
+  return `${authority}${masked}`;
+}
+function identityKeys(){return ["service.name","service.namespace","service.instance.id","service_name","service_namespace","service_instance_id","prometheus.job","prometheus.instance","otel_resource_id"]}
+function proposedResource(baseResource,receiver){
+  const resource=clone(baseResource||{});
+  identityKeys().forEach(key=>delete resource[key]);
+  Object.assign(resource,clone(receiver?.resource_attributes||{}));
+  if(receiver?.otel_resource_id)resource.otel_resource_id="unresolved Resource ID (canonical hash not standardized)";
+  return resource;
+}
+function proposedTargetInfo(prediction,strategy){
+  const targetInfo={};
+  const projection=prediction?.target_info||{};
+  for(const source of [projection.scrape_provenance_attributes,projection.semantic_service_attributes,projection.raw_underscore_service_metadata]){
+    for(const [key,value] of Object.entries(source||{}))putLabel(targetInfo,translatedKey(key,strategy),value);
+  }
+  const receiver=prediction?.collector_resources?.[0];
+  if(receiver?.otel_resource_id)targetInfo.otel_resource_id="unresolved Resource ID";
+  return targetInfo;
+}
+function displayIdentity(pair,option){
+  if(option!=="E")return clone(pair||{});
+  return {job:"unresolved by Option E",instance:"unresolved by Option E"};
+}
+function computeVariant(lane="a"){
+  const result=compute(),prediction=predictionForLane(lane),profileId=profileIdForLane(lane);
+  result.variant={option:variantOptions[lane],profileId,prediction,status:variantStatus(lane,prediction)};
+  if(!prediction||!prediction.applicable)return result;
+  const receiver=prediction.collector_resources?.[0],stage=model.stages[0];
+  if(!receiver||!stage)return result;
+  const receiverIndex=1,resource=proposedResource(result.states[receiverIndex]?.resource,receiver),selected=displayIdentity(receiver.selected_prometheus_identity,variantOptions[lane]);
+  if(stage.exporter==="otlp")result.states[receiverIndex]={protocol:"otlp",kind:"OTel resource",resource,labels:null,targetInfo:null};
+  else{
+    const projected=projectResource(resource,stage.exporter,stage.translationStrategy);
+    projected.labels=selected;
+    result.states[receiverIndex]=projected;
+  }
+  const finalIndex=result.states.length-1,finalState=clone(result.states[finalIndex]),finalIdentity=displayIdentity(prediction.predicted_final?.job_instance,variantOptions[lane]),upstream=displayIdentity(prediction.predicted_final?.upstream_job_instance,variantOptions[lane]);
+  finalState.labels={...(finalState.labels||{}),...finalIdentity};
+  delete finalState.labels.exported_job;delete finalState.labels.exported_instance;
+  if(prediction.predicted_final?.upstream_preserved_as){finalState.labels.exported_job=upstream.job;finalState.labels.exported_instance=upstream.instance}
+  const targetStrategy=finalInputProtocol()==="otlp"?model.final.translationStrategy:activeExporterTranslation(),predictedInfo=proposedTargetInfo(prediction,targetStrategy);
+  if(Object.keys(predictedInfo).length){
+    const preserved={};
+    for(const [key,value] of Object.entries(finalState.targetInfo||{}))if(!identityKeys().includes(key))preserved[key]=value;
+    finalState.targetInfo={...preserved,...predictedInfo};
+    finalState.targetInfoLabels=clone(finalState.labels);
+  }
+  result.states[finalIndex]=finalState;
+  return result;
 }
 function stateRows(state){
   const rows=[];
@@ -242,8 +341,12 @@ function stageButtons(i){return `<div class="stage-actions"><button data-move-le
 function finalNode(){const input=finalInputProtocol();return `<div class="pipe-node composite fixed-node" data-family="prom"><span class="node-kind">Fixed destination</span><b>Prometheus server</b><label>ingestion<input value="${INGEST[input]}" disabled></label>${componentSettings(model.final,input,"final",0)}<small>Final queryable storage · cannot be removed</small></div>`}
 function componentFamily(node){return node?.type==="final"?"prom":"otel"}
 function protocolFamily(protocol){return protocol==="otlp"?"otel":"prom"}
+function variantControls(lane){
+  const option=variantOptions[lane],deriveVisible=["C","C1"].includes(option),status=variantStatus(lane);
+  return `<div class="variant-controls" data-variant-controls="${lane}"><label><span>Behavior</span><select data-variant-option="${lane}">${VARIANT_OPTIONS.map(([value,label])=>`<option value="${value}" ${option===value?"selected":""}>${label}</option>`).join("")}</select></label>${deriveVisible?`<label><span>service.* defaulting</span><select data-variant-derive="${lane}"><option value="default-derive" ${variantDerivations[lane]==="default-derive"?"selected":""}>Current derivation</option><option value="never-derive" ${variantDerivations[lane]==="never-derive"?"selected":""}>Never derive</option></select></label>`:""}<strong data-confidence="${status.confidence}">${status.label}</strong></div>`;
+}
 function pipelineMarkup(target,lane){return usingModel(target,()=>{const isActive=index=>comparisonMode?compareSelections[lane]===index:index>=selectedRange.start&&index<=selectedRange.end,parts=[sourceNode()];model.stages.forEach((s,i)=>{const active=isActive(i),fromFamily=i===0?"otel":componentFamily(model.stages[i-1]),toFamily=componentFamily(s);parts.push(`<button class="pipe-arrow ${active?"active":""}" data-boundary="${i}" data-from-family="${fromFamily}" data-to-family="${toFamily}" aria-pressed="${active}" aria-label="Select boundary ${i+1} in Pipeline ${lane.toUpperCase()}"><span></span></button>`);parts.push(stageNode(s,i))});const finalBoundary=model.stages.length,finalActive=isActive(finalBoundary),finalFrom=model.stages.length?componentFamily(model.stages.at(-1)):"otel";parts.push(`<button class="pipe-arrow ${finalActive?"active":""}" data-boundary="${finalBoundary}" data-from-family="${finalFrom}" data-to-family="prom" aria-pressed="${finalActive}" aria-label="Select final boundary in Pipeline ${lane.toUpperCase()}"><span></span></button>`);parts.push(finalNode());return `<div class="pipeline" data-pipeline-lane="${lane}" aria-label="Pipeline ${lane.toUpperCase()}">${parts.join("")}</div>`})}
-function laneMarkup(target,lane){const evidence=evidenceFor(target);return `<section class="pipeline-lane pipeline-lane-${lane}"><header><b>Pipeline ${lane.toUpperCase()}</b><span>${evidence?`LAB TESTED · ${evidence.id}`:"NO EXACT MATRIX MATCH"}</span></header>${pipelineMarkup(target,lane)}</section>`}
+function laneMarkup(target,lane){const evidence=evidenceFor(target);return `<section class="pipeline-lane pipeline-lane-${lane}"><header><div class="lane-title"><b>Pipeline ${lane.toUpperCase()}</b><span>${evidence?`LAB CASE · ${evidence.id}`:"NO EXACT MATRIX MATCH"}</span></div>${variantControls(lane)}</header>${pipelineMarkup(target,lane)}</section>`}
 function bindPipelineInteractions(lane,target){
   const laneName=lane.dataset.pipelineLane;
   lane.querySelector("[data-source-output]").onchange=e=>{target.source=e.target.value;render()};
@@ -253,14 +356,16 @@ function bindPipelineInteractions(lane,target){
   lane.querySelectorAll("[data-remove-stage]").forEach(b=>b.onclick=()=>{target.stages.splice(+b.dataset.removeStage,1);if(comparisonMode)compareSelections[laneName]=target.stages.length;clampSelections();render()});
 }
 function renderWorkbench(){
-  const host=document.querySelector("#pipeline-host");host.classList.toggle("compare-lanes",comparisonMode);host.innerHTML=comparisonMode?laneMarkup(model,"a")+laneMarkup(compareModel,"b"):pipelineMarkup(model,"a");
+  const host=document.querySelector("#pipeline-host");host.classList.toggle("compare-lanes",comparisonMode);host.innerHTML=comparisonMode?laneMarkup(model,"a")+laneMarkup(compareModel,"b"):`<div class="trace-variant-bar">${variantControls("a")}</div>${pipelineMarkup(model,"a")}`;
   host.querySelectorAll("[data-pipeline-lane]").forEach((lane,index)=>bindPipelineInteractions(lane,index===0?model:compareModel));
+  host.querySelectorAll("[data-variant-option]").forEach(select=>select.onchange=e=>{variantOptions[e.target.dataset.variantOption]=e.target.value;render()});
+  host.querySelectorAll("[data-variant-derive]").forEach(select=>select.onchange=e=>{variantDerivations[e.target.dataset.variantDerive]=e.target.value;render()});
   document.querySelectorAll("[data-workbench-mode]").forEach(button=>{const active=button.dataset.workbenchMode===(comparisonMode?"compare":"trace");button.setAttribute("aria-pressed",String(active));button.onclick=()=>setWorkbenchMode(button.dataset.workbenchMode)});
   document.querySelector("#workbench-title").textContent=comparisonMode?"PIPELINE COMPARISON":"BOUNDARY TRACE";
   const selectedCount=selectedRange.end-selectedRange.start+1;document.querySelector("#boundary-selection-help").textContent=comparisonMode?"Each pipeline has its own selected output. Click a connector in either lane to compare those two boundary states.":selectedCount===1?"One boundary selected. Click another arrow to extend the comparison across every component between them.":`${selectedCount} consecutive boundaries selected. Click a selected arrow to start a new range.`;
   const evidence=evidenceFor(model),comparisonEvidence=comparisonMode?evidenceFor(compareModel):null,paired=pairedCoverageCase(evidence),status=document.querySelector("#coverage-status"),matrixCase=document.querySelector("#matrix-current-case"),allTested=Boolean(evidence)&&(!comparisonMode||Boolean(comparisonEvidence));status.textContent=comparisonMode?`A · ${evidence?.id||"—"}  ↔  B · ${comparisonEvidence?.id||"—"}`:evidence?`LAB TESTED · ${evidence.id}${paired?` · PAIRED WITH ${paired.id}`:""}`:"NO EXACT MATRIX MATCH";status.style.background=allTested?"#e7f5f2":"#fff6dc";status.style.color=allTested?"#087368":"#775d00";if(matrixCase)matrixCase.textContent=comparisonMode?`A ${evidence?.id||"—"} · B ${comparisonEvidence?.id||"—"}`:evidence?`${evidence.id}${paired?` ↔ ${paired.id}`:""}`:"—";const banner=document.querySelector("#unsupported-banner");banner.hidden=allTested;banner.textContent=comparisonMode?"At least one pipeline does not match an exact Lab tuple.":"This combination does not match an exact Lab tuple.";renderInspector();
 }
-function setWorkbenchMode(mode){const next=mode==="compare";if(next&&!comparisonMode){compareModel=clone(model);const selected=Math.min(selectedRange.end,model.stages.length);compareSelections={a:selected,b:selected}}comparisonMode=next;render()}
+function setWorkbenchMode(mode){const next=mode==="compare";if(next&&!comparisonMode){compareModel=clone(model);variantOptions.b=variantOptions.a;variantDerivations.b=variantDerivations.a;const selected=Math.min(selectedRange.end,model.stages.length);compareSelections={a:selected,b:selected}}comparisonMode=next;render()}
 function selectBoundary(index){
   const {start,end}=selectedRange;
   if(start===end&&index!==start)selectedRange={start:Math.min(start,index),end:Math.max(start,index)};
@@ -282,7 +387,7 @@ function componentPathName(node,index,logical){if(node.type==="collector"){const
 function renderInspector(){
   if(comparisonMode){renderComparisonInspector();return}
   connectionMode="trace";renderLegend("trace");
-  const {logical,states}=compute(),start=selectedRange.start,end=selectedRange.end,before=states[start],after=states[end+1],nodes=logical.slice(start+1,end+2),path=logical.slice(start,end+2),beforeRows=stateRows(before),afterRows=stateRows(after),classifiedBefore=classifyRows(beforeRows,afterRows,"before"),classifiedAfter=classifyRows(afterRows,beforeRows,"after"),total=logical.length-1,count=end-start+1,beforePanel=document.querySelector("#before-state").closest(".state-panel"),afterPanel=document.querySelector("#after-state").closest(".state-panel");
+  const result=computeVariant("a"),{logical,states}=result,start=selectedRange.start,end=selectedRange.end,before=states[start],after=states[end+1],nodes=logical.slice(start+1,end+2),path=logical.slice(start,end+2),beforeRows=stateRows(before),afterRows=stateRows(after),classifiedBefore=classifyRows(beforeRows,afterRows,"before"),classifiedAfter=classifyRows(afterRows,beforeRows,"after"),total=logical.length-1,count=end-start+1,beforePanel=document.querySelector("#before-state").closest(".state-panel"),afterPanel=document.querySelector("#after-state").closest(".state-panel");
   beforePanel.dataset.family=protocolFamily(before.protocol);afterPanel.dataset.family=protocolFamily(after.protocol);
   document.querySelector("#inspector-range-label").textContent=count===1?"SELECTED BOUNDARY":"SELECTED BOUNDARY RANGE";
   document.querySelector("#inspector-title").textContent=path.map((node,i)=>componentPathName(node,start+i,logical)).join(" → ");
@@ -291,7 +396,7 @@ function renderInspector(){
   document.querySelector("#before-state").innerHTML=renderRows(classifiedBefore);document.querySelector("#after-state").innerHTML=renderRows(classifiedAfter);
   activeConnections=connectionPairs(classifiedBefore,classifiedAfter);requestAnimationFrame(()=>requestAnimationFrame(drawFieldConnectors));
   document.querySelector("#transform-verb").textContent=count===1?nodeAction(nodes[0],before):`${count} components in sequence`;
-  const explanation=nodes.map((node,i)=>count===1?interpretation(node,states[start+i]):`<strong>${i+1}. ${componentPathName(node,start+i+1,logical)}:</strong> ${interpretation(node,states[start+i])}`).join(" "),evidence=matchedCoverageCase();document.querySelector("#interpretation").innerHTML=`<span>${evidence?`LAB OBSERVATION · ${evidence.id}`:"COMPONENT RULE · OUTSIDE COMPLETE MATRIX"}</span><p>${explanation}</p>`;
+  const explanation=nodes.map((node,i)=>count===1?interpretation(node,states[start+i]):`<strong>${i+1}. ${componentPathName(node,start+i+1,logical)}:</strong> ${interpretation(node,states[start+i])}`).join(" "),evidence=matchedCoverageCase();document.querySelector("#interpretation").innerHTML=`<span>${variantEvidenceLabel(result,evidence)}</span><p>${explanation}${variantNarrative(result)}</p>`;
 }
 function renderComparisonInspector(){
   connectionMode="compare";renderLegend("compare");
@@ -304,10 +409,11 @@ function renderComparisonInspector(){
   document.querySelector("#before-state").innerHTML=renderRows(classifiedA);document.querySelector("#after-state").innerHTML=renderRows(classifiedB);
   activeConnections=connectionPairs(classifiedA,classifiedB,"compare");requestAnimationFrame(()=>requestAnimationFrame(drawFieldConnectors));
   document.querySelector("#transform-verb").textContent="label correlation · not data flow";
-  const changed=new Set([...classifiedA.filter(row=>row[2]!=="unchanged").map(row=>row[0]),...classifiedB.filter(row=>row[2]!=="unchanged").map(row=>row[0])]).size,summary=changed?`${changed} identity field${changed===1?"":"s"} differ at this output.`:"The identity fields are identical at this output.";
-  document.querySelector("#interpretation").innerHTML=`<span>LAB COMPARISON · A ${aEvidence?.id||"—"} ↔ B ${bEvidence?.id||"—"}</span><p>${summary} Change protocols or configuration inside either pipeline's component cards to isolate the cause.</p>`;
+  const changed=new Set([...classifiedA.filter(row=>row[2]!=="unchanged").map(row=>row[0]),...classifiedB.filter(row=>row[2]!=="unchanged").map(row=>row[0])]).size,symbolic=[a,b].some(result=>result.variant.prediction?.confidence==="symbolic"),summary=symbolic?"Exact output comparison is unavailable because at least one selected design is symbolic.":changed?`${changed} identity field${changed===1?"":"s"} differ at this output.`:"The identity fields are identical at this output.",narratives=[variantNarrative(a),variantNarrative(b)].filter(Boolean).filter((value,index,items)=>items.indexOf(value)===index).join("");
+  document.querySelector("#interpretation").innerHTML=`<span>A: ${variantEvidenceLabel(a,aEvidence)} · B: ${variantEvidenceLabel(b,bEvidence)}</span><p>${summary} Change protocols, component configuration, or the behavior alternative independently in either pipeline.${narratives}</p>`;
 }
 function renderRows(rows,empty="No identity fields recorded here."){const labels={unchanged:"same",remapped:"remapped",derived:connectionMode==="compare"?"only in B":"new",lost:connectionMode==="compare"?"only in A":"lost"};return rows.length?rows.map(([k,v,status,detail],index)=>`<div class="state-row diff-${status}" data-row-index="${index}"><span>${k}<em class="change-tag">${detail||labels[status]}</em></span><b>${v??"—"}</b></div>`).join(""):`<div class="empty-state">${empty}</div>`}
 function render(){clampSelections();renderControls();renderWorkbench()}
 render();
+fetch(ALTERNATIVES_URL).then(response=>{if(!response.ok)throw new Error(`Alternative data: ${response.status}`);return response.json()}).then(data=>{alternatives=data;alternativesIndex=new Map(data.predictions.map(prediction=>[`${prediction.case_id}|${prediction.profile_id}`,prediction]));render()}).catch(error=>{console.error(error);alternatives={error:true};render()});
 window.addEventListener("resize",()=>requestAnimationFrame(drawFieldConnectors));

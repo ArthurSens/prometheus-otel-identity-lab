@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Play:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261007-18">
+  <link rel="stylesheet" href="styles.css?v=20261007-19">
 </head>
 <body>
   <div class="noise" aria-hidden="true"></div>
@@ -30,7 +30,7 @@
         <p class="eyebrow"><span></span> Technical note · identity boundary experiment</p>
         <h1 id="hero-title">How does identity change between Prometheus and OpenTelemetry?</h1>
         <p class="dek">This is an interactive reading of one controlled experiment. It follows the same service identity — <code>payments / checkout / sdk-1</code> — through exposition, scrape, Collector receivers and exporters, OTLP, Remote Write 2.0, and Prometheus storage.</p>
-        <p class="hero-method">Use the workbench below to compare observed boundaries. The Lab covers all 58 configurations with zero or one Collector, including paired dotted and flattened SDK exposition; graphs beyond that finite scope remain explicitly marked.</p>
+        <p class="hero-method">Use the workbench below to trace measured behavior or compare stakeholder design alternatives. The Lab covers all 58 configurations with zero or one Collector; proposed outcomes are separately labeled as specification-predicted or symbolic.</p>
       </div>
     </section>
 
@@ -38,9 +38,9 @@
       <div class="section-heading">
         <div>
           <p class="eyebrow"><span></span> Boundary workbench</p>
-          <h2 id="experiment-title">Inspect the transformation, one boundary at a time.</h2>
+          <h2 id="experiment-title">Inspect current behavior — then test the alternatives.</h2>
         </div>
-        <p>Build a route from the fixed SDK source to the fixed Prometheus destination. The workbench maps every valid zero-or-one-Collector configuration to its exact Lab case.</p>
+        <p>Build a route from the fixed SDK source to the fixed Prometheus destination. Select Current, B, C, C.1, or E independently for each pipeline and compare any two resulting boundary states.</p>
       </div>
 
       <div class="lab-shell">
@@ -121,6 +121,7 @@
           <a href="https://docs.google.com/document/d/1NcVE-wGccI8HcNW2TFuiN3mBDNtKw5h6-Kw7gb7rRGk/edit" target="_blank" rel="noreferrer">Complete Lab report <span>↗</span></a>
           <a href="https://drive.google.com/file/d/1Tk_u0ocZVLu19xnzVMficZgkohsjwzFF/view" target="_blank" rel="noreferrer">Canonical Markdown <span>↗</span></a>
           <a href="https://drive.google.com/file/d/1U4NV0Z7ahvBDOufBusfHNNamdrl8By8X/view" target="_blank" rel="noreferrer">Evidence archive <span>↗</span></a>
+          <a href="https://docs.google.com/document/d/1jHfIOriXvBAFQ9PwRRuEqnmDH8nQ3U1cistdfE7XOIE/edit?tab=t.bnx0d8mtm00h" target="_blank" rel="noreferrer">Stakeholder design alternatives <span>↗</span></a>
         </div>
       </div>
       <div class="evidence-ledger">
@@ -130,6 +131,7 @@
         <div><code>cases/*/checkpoint.jsonl</code><p>Resource and datapoint identity inside Collectors</p></div>
         <div><code>cases/*/final-*.json</code><p>What Prometheus actually stored</p></div>
         <div><code>assertions.txt</code><p>676 named checks from the stable-identity rerun</p></div>
+        <div><code>predicted/alternative-variants.json</code><p>Specification-predicted B, C, C.1, and symbolic E outcomes; not runtime evidence</p></div>
         <div><code>SHA256SUMS</code><p>Integrity of the evidence set</p></div>
       </div>
     </section>
@@ -137,9 +139,9 @@
 
   <footer>
     <div class="brand footer-brand"><span class="brand-mark"><i></i><i></i></span><span><b>Prometheus × OpenTelemetry</b><small>Identity Lab</small></span></div>
-    <p>Observed behavior, specification requirements, implementation choices, and proposed future behavior are different things. This site reports the first.</p>
+    <p>Observed behavior, specification requirements, implementation choices, and proposed future behavior are different things. This site keeps their evidence classes explicit.</p>
     <span>Arthur’s Editorial Brain · Lab 01</span>
   </footer>
-  <script src="app.js?v=20261007-20"></script>
+  <script src="app.js?v=20261007-21"></script>
 </body>
 </html>

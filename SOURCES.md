@@ -12,6 +12,8 @@
 
 The interactive composer is constrained to the Lab topology: fixed OTel SDK source, zero or one optional Collector, and fixed final Prometheus server. Collector receivers are selected from their incoming protocol and Collector exporters are user-selectable. All 58 configurations are matched to the authoritative Lab tuple manifest. The complete case list is linked as matrix documentation rather than exposed as route presets. Prometheus-source routes expose an SDK-owned translation control that selects either flattened or dotted `target_info` resource keys, never both. The inspector represents the resulting identity-authority change, semicolon-joined values under keep=true plus underscore translation, distinct dotted/underscore keys under `NoTranslation`, and double-prefixed exported identity after two honor-false scrape boundaries. The Lab's artificial `lab_honor_probe` series is intentionally excluded from the workbench.
 
+The proposal selector is backed by `experiments/complete-36/predicted/alternative-variants.json`, which crosses the 58 measured cases with B, C (two derivation modes), C.1 (two derivation modes), and symbolic E. Those rows are counterfactual applications of the stakeholder design text, not additional runtime captures. The UI therefore retains the measured current path as its baseline and displays an explicit evidence class for every selected alternative.
+
 ## Version and scope
 
 - Prometheus `3.14.0`
