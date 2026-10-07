@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Play:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20261007-14">
 </head>
 <body>
   <div class="noise" aria-hidden="true"></div>
@@ -31,13 +31,8 @@
         <p class="eyebrow"><span></span> Technical note · identity boundary experiment</p>
         <h1 id="hero-title">How does identity change between Prometheus and OpenTelemetry?</h1>
         <p class="dek">This is an interactive reading of one controlled experiment. It follows the same service identity — <code>payments / checkout / sdk-1</code> — through exposition, scrape, Collector receivers and exporters, OTLP, Remote Write 2.0, and Prometheus storage.</p>
-        <p class="hero-method">Use the workbench below to compare observed boundaries. If a component transition was not exercised by the experiment, the interface marks it as unknown instead of predicting a result.</p>
+        <p class="hero-method">Use the workbench below to compare observed boundaries. The Lab covers all 36 configurations with zero or one Collector; graphs beyond that finite scope remain explicitly marked.</p>
       </div>
-    </section>
-
-    <section class="thesis-strip" aria-label="Core thesis">
-      <span>WORKING CONCLUSION</span>
-      <p><code>job</code> and <code>instance</code> are boundary-specific projections — not immutable application fields.</p>
     </section>
 
     <section class="experiment-section" id="experiment" aria-labelledby="experiment-title">
@@ -46,7 +41,7 @@
           <p class="eyebrow"><span></span> Boundary workbench</p>
           <h2 id="experiment-title">Inspect the transformation, one boundary at a time.</h2>
         </div>
-        <p>Choose a tested route or alter the chain. Every supported transition comes from the clean Docker rerun. Untested transitions are clearly flagged.</p>
+        <p>Choose a route or alter the chain. Every zero-or-one-Collector configuration maps to a clean Lab case; relay and multi-Collector graphs remain outside the complete matrix.</p>
       </div>
 
       <div class="lab-shell">
@@ -59,10 +54,6 @@
             <div class="control-label"><span>02</span><b>Pipeline structure</b></div>
             <div class="component-list" id="component-list"></div>
           </div>
-          <div class="control-block config-block">
-            <div class="control-label"><span>03</span><b>Configuration</b></div>
-            <div id="config-controls"></div>
-          </div>
         </aside>
 
         <div class="workbench">
@@ -71,18 +62,26 @@
             <div id="coverage-status" class="coverage-status"></div>
           </div>
           <div class="pipeline" id="pipeline" aria-label="Valid telemetry pipeline"></div>
+          <p class="boundary-selection-help" id="boundary-selection-help"></p>
           <div id="unsupported-banner" class="unsupported-banner" hidden></div>
           <div class="inspector-head">
             <div>
-              <span>SELECTED BOUNDARY</span>
+              <span id="inspector-range-label">SELECTED BOUNDARY</span>
               <h3 id="inspector-title">Select a boundary</h3>
             </div>
             <div class="boundary-stepper" id="boundary-stepper"></div>
           </div>
+          <div class="diff-legend" aria-label="Field comparison legend">
+            <span><i class="diff-swatch diff-unchanged"></i>Same</span>
+            <span><i class="diff-swatch diff-remapped"></i>Remapped</span>
+            <span><i class="diff-swatch diff-derived"></i>New / derived</span>
+            <span><i class="diff-swatch diff-lost"></i>Lost</span>
+          </div>
           <div class="inspector-grid">
+            <svg id="field-connectors" class="field-connectors" aria-hidden="true"></svg>
             <article class="state-panel">
               <div class="panel-head"><span>BEFORE</span><b id="before-kind">—</b></div>
-              <div id="before-state" class="state-body"></div>
+              <div id="before-state" class="state-body" aria-live="polite"></div>
             </article>
             <div class="transform-column">
               <div class="transform-glyph">→</div>
@@ -90,7 +89,7 @@
             </div>
             <article class="state-panel after-panel">
               <div class="panel-head"><span>AFTER</span><b id="after-kind">—</b></div>
-              <div id="after-state" class="state-body"></div>
+              <div id="after-state" class="state-body" aria-live="polite"></div>
             </article>
           </div>
           <article class="interpretation" id="interpretation">
@@ -130,10 +129,15 @@
           <h3>Scrape policy can rewrite the result</h3>
           <p>An exporter may derive the expected identity, then <code>honor_labels=false</code> replaces it with scrape-target identity and preserves the original as <code>exported_*</code>.</p>
         </article>
-        <article class="rule caveat-rule">
-          <span class="rule-no">!</span>
-          <h3>Scope is a feature, not a footnote</h3>
-          <p>This experiment does not make claims about metric names, types, scope data, histograms, timestamps, temporality, exemplars, or HELP/TYPE/UNIT.</p>
+        <article class="rule caution-rule">
+          <span class="rule-no">05</span>
+          <h3>Normalization can merge concepts</h3>
+          <p>After a Prometheus receiver, keep=true plus underscore translation can collapse dotted and underscore identity keys into semicolon-joined values. <code>NoTranslation</code> keeps them distinct.</p>
+        </article>
+        <article class="rule">
+          <span class="rule-no">06</span>
+          <h3>Identity can have generations</h3>
+          <p>Two honor-false scrape boundaries can expose final, source, and intermediate identity as <code>job</code>, <code>exported_job</code>, and <code>exported_exported_job</code>.</p>
         </article>
       </div>
     </section>
@@ -152,9 +156,10 @@
       <div class="evidence-ledger">
         <div class="ledger-head"><span>CAPTURE</span><span>PROVES</span></div>
         <div><code>exposition/*.txt</code><p>Exact exporter page before a scrape</p></div>
-        <div><code>identity-checkpoints/*.jsonl</code><p>Resource and datapoint identity inside Collectors</p></div>
-        <div><code>api/*/identity/*.json</code><p>What Prometheus actually stored</p></div>
-        <div><code>assertions.txt</code><p>44 named checks from the clean rerun</p></div>
+        <div><code>coverage-manifest.json</code><p>All 36 normalized tuples and their final observed label sets</p></div>
+        <div><code>cases/*/checkpoint.jsonl</code><p>Resource and datapoint identity inside Collectors</p></div>
+        <div><code>cases/*/final-*.json</code><p>What Prometheus actually stored</p></div>
+        <div><code>assertions.txt</code><p>272 named checks from the clean rerun</p></div>
         <div><code>SHA256SUMS</code><p>Integrity of the evidence set</p></div>
       </div>
     </section>
@@ -165,6 +170,6 @@
     <p>Observed behavior, specification requirements, implementation choices, and proposed future behavior are different things. This site reports the first.</p>
     <span>Arthur’s Editorial Brain · Lab 01</span>
   </footer>
-  <script src="app.js"></script>
+  <script src="app.js?v=20261007-14"></script>
 </body>
 </html>

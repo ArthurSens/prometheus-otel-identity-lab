@@ -10,12 +10,12 @@
 
 ## Implementation policy
 
-The interactive composer prevents disconnected or role-invalid chains. The OTel SDK and final Prometheus server are fixed; Collector receivers are selected from their incoming protocol; Collector exporters are user-selectable; and optional relay servers always forward through Remote Write 2.0. Custom complete compositions are labeled as not run end-to-end, while their boundary explanations reuse only component rules observed in the clean Lab rerun.
+The interactive composer prevents disconnected or role-invalid chains. The OTel SDK and final Prometheus server are fixed; Collector receivers are selected from their incoming protocol; Collector exporters are user-selectable; and optional relay servers always forward through Remote Write 2.0. All 36 zero-or-one-Collector compositions are matched to the authoritative Lab tuple manifest. The inspector represents semicolon-joined values under keep=true plus underscore translation, distinct dotted/underscore keys under `NoTranslation`, and double-prefixed exported identity after two honor-false scrape boundaries. The Lab's artificial `lab_honor_probe` series is intentionally excluded from the workbench. Relay and multi-Collector compositions remain labeled as outside the complete matrix.
 
 ## Version and scope
 
 - Prometheus `3.14.0`
 - OpenTelemetry Collector Contrib `0.162.0`
-- Clean Docker rerun: 44/44 identity assertions passed
+- Clean Docker rerun: 36/36 exact configurations covered; 272/272 named assertions passed
 - Analyzed: `job`, `instance`, OTel resource identity, `target_info`
 - Out of scope: metric names/types, scope data, histograms, timestamps, temporality, exemplars, and HELP/TYPE/UNIT
