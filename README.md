@@ -2,6 +2,8 @@
 
 Static, dependency-free technical explainer based on Arthur's Editorial Brain and the clean identity-boundary Lab rerun. The presentation is intentionally evidence-first and avoids product or campaign framing.
 
+Live site: https://arthursens.github.io/prometheus-otel-identity-lab/
+
 ## Run locally
 
 ```bash
