@@ -59,6 +59,7 @@ let model={source:"otlp",sourceStrategy:DEFAULT_TRANSLATION,stages:[collector("p
 let comparisonMode=false;
 let compareModel=null;
 let selectedRange={start:0,end:0};
+let compareSelections={a:0,b:0};
 let activeConnections=[];
 let connectionMode="trace";
 const clone=value=>JSON.parse(JSON.stringify(value));
@@ -223,8 +224,9 @@ function interpretation(node,input){
 
 function renderControls(){
   const hasCollector=Boolean(model.stages.length);
-  document.querySelector("#component-list").innerHTML=`<button class="component-button" data-add="collector" ${hasCollector?"disabled":""}>${hasCollector?"Collector already added":"Add Collector"}</button><p class="control-help">The experiment covers a direct SDK route or one Collector before the fixed final Prometheus server.</p>`;
-  const add=document.querySelector('[data-add="collector"]');if(add&&!hasCollector)add.onclick=()=>{model.stages.push(collector("otlp"));if(comparisonMode)compareModel.stages.push(collector("otlp"));selectedRange={start:0,end:0};render()};
+  const compareHasCollector=Boolean(compareModel?.stages.length);
+  document.querySelector("#component-list").innerHTML=comparisonMode?`<button class="component-button" data-add="collector" data-target-pipeline="a" ${hasCollector?"disabled":""}>${hasCollector?"Pipeline A · Collector added":"Add Collector to Pipeline A"}</button><button class="component-button" data-add="collector" data-target-pipeline="b" ${compareHasCollector?"disabled":""}>${compareHasCollector?"Pipeline B · Collector added":"Add Collector to Pipeline B"}</button><p class="control-help">Each pipeline independently supports a direct SDK route or one Collector before Prometheus.</p>`:`<button class="component-button" data-add="collector" data-target-pipeline="a" ${hasCollector?"disabled":""}>${hasCollector?"Collector already added":"Add Collector"}</button><p class="control-help">The experiment covers a direct SDK route or one Collector before the fixed final Prometheus server.</p>`;
+  document.querySelectorAll('[data-add="collector"]:not(:disabled)').forEach(add=>add.onclick=()=>{const lane=add.dataset.targetPipeline,target=lane==="b"?compareModel:model;target.stages.push(collector("otlp"));if(comparisonMode)compareSelections[lane]=target.stages.length;else selectedRange={start:0,end:0};render()});
 }
 function settingToggle(owner,index,key,label,value,scope){return `<div class="node-setting"><span><b>${label}</b><small>${scope}</small></span><label class="switch" aria-label="Toggle ${label}"><input type="checkbox" data-setting-owner="${owner}" data-setting-index="${index}" data-setting-key="${key}" ${value?"checked":""}><i></i></label></div>`}
 function translationControl(owner,index,value,scope){return `<label class="translation-setting"><span><b>translation_strategy</b><small>${scope}</small></span><select data-setting-owner="${owner}" data-setting-index="${index}" data-setting-key="translationStrategy">${TRANSLATION_OPTIONS.map(([v,label])=>`<option value="${v}" ${value===v?"selected":""}>${label}</option>`).join("")}</select></label>`}
@@ -241,24 +243,25 @@ function stageButtons(i){return `<div class="stage-actions"><button data-move-le
 function finalNode(){const input=finalInputProtocol();return `<div class="pipe-node composite fixed-node" data-family="prom"><span class="node-kind">Fixed destination</span><b>Prometheus server</b><label>ingestion<input value="${INGEST[input]}" disabled></label>${componentSettings(model.final,input,"final",0)}<small>Final queryable storage · cannot be removed</small></div>`}
 function componentFamily(node){return node?.type==="final"?"prom":"otel"}
 function protocolFamily(protocol){return protocol==="otlp"?"otel":"prom"}
-function pipelineMarkup(target,lane){return usingModel(target,()=>{const parts=[sourceNode()];model.stages.forEach((s,i)=>{const active=i>=selectedRange.start&&i<=selectedRange.end,fromFamily=i===0?"otel":componentFamily(model.stages[i-1]),toFamily=componentFamily(s);parts.push(`<button class="pipe-arrow ${active?"active":""}" data-boundary="${i}" data-from-family="${fromFamily}" data-to-family="${toFamily}" aria-pressed="${active}" aria-label="Select boundary ${i+1} in Pipeline ${lane.toUpperCase()}"><span></span></button>`);parts.push(stageNode(s,i))});const finalBoundary=model.stages.length,finalActive=finalBoundary>=selectedRange.start&&finalBoundary<=selectedRange.end,finalFrom=model.stages.length?componentFamily(model.stages.at(-1)):"otel";parts.push(`<button class="pipe-arrow ${finalActive?"active":""}" data-boundary="${finalBoundary}" data-from-family="${finalFrom}" data-to-family="prom" aria-pressed="${finalActive}" aria-label="Select final boundary in Pipeline ${lane.toUpperCase()}"><span></span></button>`);parts.push(finalNode());return `<div class="pipeline" data-pipeline-lane="${lane}" aria-label="Pipeline ${lane.toUpperCase()}">${parts.join("")}</div>`})}
+function pipelineMarkup(target,lane){return usingModel(target,()=>{const isActive=index=>comparisonMode?compareSelections[lane]===index:index>=selectedRange.start&&index<=selectedRange.end,parts=[sourceNode()];model.stages.forEach((s,i)=>{const active=isActive(i),fromFamily=i===0?"otel":componentFamily(model.stages[i-1]),toFamily=componentFamily(s);parts.push(`<button class="pipe-arrow ${active?"active":""}" data-boundary="${i}" data-from-family="${fromFamily}" data-to-family="${toFamily}" aria-pressed="${active}" aria-label="Select boundary ${i+1} in Pipeline ${lane.toUpperCase()}"><span></span></button>`);parts.push(stageNode(s,i))});const finalBoundary=model.stages.length,finalActive=isActive(finalBoundary),finalFrom=model.stages.length?componentFamily(model.stages.at(-1)):"otel";parts.push(`<button class="pipe-arrow ${finalActive?"active":""}" data-boundary="${finalBoundary}" data-from-family="${finalFrom}" data-to-family="prom" aria-pressed="${finalActive}" aria-label="Select final boundary in Pipeline ${lane.toUpperCase()}"><span></span></button>`);parts.push(finalNode());return `<div class="pipeline" data-pipeline-lane="${lane}" aria-label="Pipeline ${lane.toUpperCase()}">${parts.join("")}</div>`})}
 function laneMarkup(target,lane){const evidence=evidenceFor(target);return `<section class="pipeline-lane pipeline-lane-${lane}"><header><b>Pipeline ${lane.toUpperCase()}</b><span>${evidence?`LAB TESTED · ${evidence.id}`:"NO EXACT MATRIX MATCH"}</span></header>${pipelineMarkup(target,lane)}</section>`}
 function bindPipelineInteractions(lane,target){
+  const laneName=lane.dataset.pipelineLane;
   lane.querySelector("[data-source-output]").onchange=e=>{target.source=e.target.value;render()};
   lane.querySelectorAll("[data-exporter]").forEach(el=>el.onchange=e=>{target.stages[+e.target.dataset.exporter].exporter=e.target.value;render()});
   lane.querySelectorAll("[data-setting-key]").forEach(el=>el.onchange=e=>updateSetting(e.target,target));
-  lane.querySelectorAll("[data-boundary]").forEach(b=>b.onclick=()=>selectBoundary(+b.dataset.boundary));
-  lane.querySelectorAll("[data-remove-stage]").forEach(b=>b.onclick=()=>{const index=+b.dataset.removeStage;model.stages.splice(index,1);if(comparisonMode)compareModel.stages.splice(index,1);clampSelection();render()});
+  lane.querySelectorAll("[data-boundary]").forEach(b=>b.onclick=()=>comparisonMode?selectCompareBoundary(laneName,+b.dataset.boundary):selectBoundary(+b.dataset.boundary));
+  lane.querySelectorAll("[data-remove-stage]").forEach(b=>b.onclick=()=>{target.stages.splice(+b.dataset.removeStage,1);if(comparisonMode)compareSelections[laneName]=target.stages.length;clampSelections();render()});
 }
 function renderWorkbench(){
   const host=document.querySelector("#pipeline-host");host.classList.toggle("compare-lanes",comparisonMode);host.innerHTML=comparisonMode?laneMarkup(model,"a")+laneMarkup(compareModel,"b"):pipelineMarkup(model,"a");
   host.querySelectorAll("[data-pipeline-lane]").forEach((lane,index)=>bindPipelineInteractions(lane,index===0?model:compareModel));
   document.querySelectorAll("[data-workbench-mode]").forEach(button=>{const active=button.dataset.workbenchMode===(comparisonMode?"compare":"trace");button.setAttribute("aria-pressed",String(active));button.onclick=()=>setWorkbenchMode(button.dataset.workbenchMode)});
   document.querySelector("#workbench-title").textContent=comparisonMode?"PIPELINE COMPARISON":"BOUNDARY TRACE";
-  const selectedCount=selectedRange.end-selectedRange.start+1;document.querySelector("#boundary-selection-help").textContent=selectedCount===1?"One boundary selected. Click another arrow to extend the comparison across every component between them.":`${selectedCount} consecutive boundaries selected. Click a selected arrow to start a new range.`;
+  const selectedCount=selectedRange.end-selectedRange.start+1;document.querySelector("#boundary-selection-help").textContent=comparisonMode?"Each pipeline has its own selected output. Click a connector in either lane to compare those two boundary states.":selectedCount===1?"One boundary selected. Click another arrow to extend the comparison across every component between them.":`${selectedCount} consecutive boundaries selected. Click a selected arrow to start a new range.`;
   const evidence=evidenceFor(model),comparisonEvidence=comparisonMode?evidenceFor(compareModel):null,paired=pairedCoverageCase(evidence),status=document.querySelector("#coverage-status"),matrixCase=document.querySelector("#matrix-current-case"),allTested=Boolean(evidence)&&(!comparisonMode||Boolean(comparisonEvidence));status.textContent=comparisonMode?`A · ${evidence?.id||"—"}  ↔  B · ${comparisonEvidence?.id||"—"}`:evidence?`LAB TESTED · ${evidence.id}${paired?` · PAIRED WITH ${paired.id}`:""}`:"NO EXACT MATRIX MATCH";status.style.background=allTested?"#e7f5f2":"#fff6dc";status.style.color=allTested?"#087368":"#775d00";if(matrixCase)matrixCase.textContent=comparisonMode?`A ${evidence?.id||"—"} · B ${comparisonEvidence?.id||"—"}`:evidence?`${evidence.id}${paired?` ↔ ${paired.id}`:""}`:"—";const banner=document.querySelector("#unsupported-banner");banner.hidden=allTested;banner.textContent=comparisonMode?"At least one pipeline does not match an exact Lab tuple.":"This combination does not match an exact Lab tuple.";renderInspector();
 }
-function setWorkbenchMode(mode){const next=mode==="compare";if(next&&!comparisonMode)compareModel=clone(model);comparisonMode=next;render()}
+function setWorkbenchMode(mode){const next=mode==="compare";if(next&&!comparisonMode){compareModel=clone(model);const selected=Math.min(selectedRange.end,model.stages.length);compareSelections={a:selected,b:selected}}comparisonMode=next;render()}
 function selectBoundary(index){
   const {start,end}=selectedRange;
   if(start===end&&index!==start)selectedRange={start:Math.min(start,index),end:Math.max(start,index)};
@@ -266,7 +269,9 @@ function selectBoundary(index){
   else selectedRange={start:index,end:index};
   renderWorkbench();
 }
+function selectCompareBoundary(lane,index){compareSelections[lane]=index;renderWorkbench()}
 function clampSelection(){const max=model.stages.length;selectedRange.start=Math.min(selectedRange.start,max);selectedRange.end=Math.min(selectedRange.end,max);if(selectedRange.start>selectedRange.end)selectedRange.start=selectedRange.end}
+function clampSelections(){clampSelection();if(compareModel){compareSelections.a=Math.min(compareSelections.a,model.stages.length);compareSelections.b=Math.min(compareSelections.b,compareModel.stages.length)}}
 function updateSetting(el,targetModel=model){
   if(el.dataset.settingOwner==="source")targetModel.sourceStrategy=el.value;
   else{const target=el.dataset.settingOwner==="final"?targetModel.final:targetModel.stages[+el.dataset.settingIndex];target[el.dataset.settingKey]=el.type==="checkbox"?el.checked:el.value}
@@ -291,11 +296,11 @@ function renderInspector(){
 }
 function renderComparisonInspector(){
   connectionMode="compare";renderLegend("compare");
-  const a=computeFor(model),b=computeFor(compareModel),start=selectedRange.start,end=selectedRange.end,aState=a.states[end+1],bState=b.states[end+1],aRows=stateRows(aState),bRows=stateRows(bState),classifiedA=classifyRows(aRows,bRows,"before"),classifiedB=classifyRows(bRows,aRows,"after"),path=a.logical.slice(start,end+2),total=a.logical.length-1,count=end-start+1,aEvidence=evidenceFor(model),bEvidence=evidenceFor(compareModel),beforePanel=document.querySelector("#before-state").closest(".state-panel"),afterPanel=document.querySelector("#after-state").closest(".state-panel");
+  const a=computeFor(model),b=computeFor(compareModel),aIndex=compareSelections.a,bIndex=compareSelections.b,aState=a.states[aIndex+1],bState=b.states[bIndex+1],aRows=stateRows(aState),bRows=stateRows(bState),classifiedA=classifyRows(aRows,bRows,"before"),classifiedB=classifyRows(bRows,aRows,"after"),aEvidence=evidenceFor(model),bEvidence=evidenceFor(compareModel),beforePanel=document.querySelector("#before-state").closest(".state-panel"),afterPanel=document.querySelector("#after-state").closest(".state-panel"),aPath=a.logical.slice(0,aIndex+2).map((node,i)=>componentPathName(node,i,a.logical)).join(" → "),bPath=b.logical.slice(0,bIndex+2).map((node,i)=>componentPathName(node,i,b.logical)).join(" → ");
   beforePanel.dataset.family=protocolFamily(aState.protocol);afterPanel.dataset.family=protocolFamily(bState.protocol);
   document.querySelector("#inspector-range-label").textContent="PIPELINE OUTPUT COMPARISON";
-  document.querySelector("#inspector-title").textContent=`A ↔ B after ${path.map((node,i)=>componentPathName(node,start+i,a.logical)).join(" → ")}`;
-  document.querySelector("#boundary-stepper").textContent=count===1?`${String(start+1).padStart(2,"0")} / ${String(total).padStart(2,"0")}`:`${String(start+1).padStart(2,"0")}–${String(end+1).padStart(2,"0")} / ${String(total).padStart(2,"0")}`;
+  document.querySelector("#inspector-title").textContent=`A · ${aPath}  ↔  B · ${bPath}`;
+  document.querySelector("#boundary-stepper").textContent=`A ${String(aIndex+1).padStart(2,"0")}/${String(a.logical.length-1).padStart(2,"0")} · B ${String(bIndex+1).padStart(2,"0")}/${String(b.logical.length-1).padStart(2,"0")}`;
   document.querySelector("#before-panel-label").textContent="PIPELINE A";document.querySelector("#after-panel-label").textContent="PIPELINE B";document.querySelector("#before-kind").textContent=`${aState.kind} · ${PROTOCOL[aState.protocol]}`;document.querySelector("#after-kind").textContent=`${bState.kind} · ${PROTOCOL[bState.protocol]}`;
   document.querySelector("#before-state").innerHTML=renderRows(classifiedA);document.querySelector("#after-state").innerHTML=renderRows(classifiedB);
   activeConnections=connectionPairs(classifiedA,classifiedB,"compare");requestAnimationFrame(()=>requestAnimationFrame(drawFieldConnectors));
@@ -304,6 +309,6 @@ function renderComparisonInspector(){
   document.querySelector("#interpretation").innerHTML=`<span>LAB COMPARISON · A ${aEvidence?.id||"—"} ↔ B ${bEvidence?.id||"—"}</span><p>${summary} Change protocols or configuration inside either pipeline's component cards to isolate the cause.</p>`;
 }
 function renderRows(rows,empty="No identity fields recorded here."){const labels={unchanged:"same",remapped:"remapped",derived:connectionMode==="compare"?"only in B":"new",lost:connectionMode==="compare"?"only in A":"lost"};return rows.length?rows.map(([k,v,status,detail],index)=>`<div class="state-row diff-${status}" data-row-index="${index}"><span>${k}<em class="change-tag">${detail||labels[status]}</em></span><b>${v??"—"}</b></div>`).join(""):`<div class="empty-state">${empty}</div>`}
-function render(){renderControls();clampSelection();renderWorkbench()}
+function render(){clampSelections();renderControls();renderWorkbench()}
 render();
 window.addEventListener("resize",()=>requestAnimationFrame(drawFieldConnectors));
