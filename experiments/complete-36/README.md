@@ -15,6 +15,8 @@ The authoritative state-space definition is [`cases.json`](cases.json). It conta
 
 The SDK strategy is exclusive. A container configured with `UnderscoreEscapingWithSuffixes` exposes `service_name` and `service_instance_id`; a container configured with `NoTranslation` exposes quoted OpenMetrics label names such as `"service.name"` and `"service.instance.id"`. The SDK never emits both forms in one case.
 
+Scrape identity is also standardized across the matrix. Every final Prometheus scrape uses `job_name: identity-lab-final`, and every Collector Prometheus receiver scrape uses `job_name: identity-lab-source`. The case-specific `coverage_case` target label keeps evidence attributable without turning the case ID into identity.
+
 ## Requirements
 
 - Docker with a running Linux-container engine
@@ -55,7 +57,7 @@ The script:
 A successful run ends with:
 
 ```text
-SUMMARY: 632/632 assertions passed; failures=0; coverage=58/58
+SUMMARY: 676/676 assertions passed; failures=0; coverage=58/58
 ```
 
 The final output line is the timestamped evidence directory. The same path is written to `experiments/complete-36/raw/LATEST`.

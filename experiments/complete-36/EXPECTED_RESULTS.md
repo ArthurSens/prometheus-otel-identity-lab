@@ -5,9 +5,18 @@ The harness treats the final Prometheus label sets as observed, version-specific
 ## Stable ordinary-series identity
 
 - Direct and Collector-mediated OTLP routes derive `job="payments/checkout"` and `instance="sdk-1"` from the fixed SDK resource unless a later Prometheus scrape with `honor_labels=false` replaces them.
-- With underscore-form SDK exposition, a Collector Prometheus receiver derives primary resource identity from its scrape target. The ordinary downstream identity therefore uses `case-<id>-receiver` and `c36-sdk:9464` unless a later honor-false scrape replaces it.
+- With underscore-form SDK exposition, a Collector Prometheus receiver derives primary resource identity from its scrape target. The ordinary downstream identity therefore uses `identity-lab-source` and `c36-sdk:9464` unless a later honor-false scrape replaces it.
 - With dotted SDK exposition, `target_info`'s `service.name="checkout"`, `service.namespace="payments"`, and `service.instance.id="sdk-1"` replace the receiver-derived service identity. A downstream Prometheus, OTLP, or Remote Write exporter therefore emits `job="payments/checkout"` and `instance="sdk-1"`, unless a later honor-false scrape replaces them.
-- A final honor-false scrape assigns `case-<id>-final` and either `c36-sdk:9464` or `c36-collector:9464`, preserving the exporter-provided pair as `exported_job` and `exported_instance`.
+- A final honor-false scrape assigns `identity-lab-final` and either `c36-sdk:9464` or `c36-collector:9464`, preserving the exporter-provided pair as `exported_job` and `exported_instance`.
+
+The scrape fixture identity is deliberately stable across cases. `coverage_case` remains case-specific for attribution, but no ordinary-series `job` or `instance` contains a case ID.
+
+The direct-scrape acceptance pair is therefore identical on ordinary identity despite its source-label spelling difference:
+
+```text
+E02 underscore source -> job="identity-lab-final", instance="c36-sdk:9464"
+D02 dotted source     -> job="identity-lab-final", instance="c36-sdk:9464"
+```
 
 ## SDK source translation strategy
 
@@ -21,7 +30,7 @@ The source strategy changes identity authority in 16 of the 22 paired topologies
 The clearest pair is `U05` and `D04`, which share the same topology:
 
 ```text
-U05 underscore source -> job="case-u05-receiver", instance="c36-sdk:9464"
+U05 underscore source -> job="identity-lab-source", instance="c36-sdk:9464"
 D04 dotted source     -> job="payments/checkout", instance="sdk-1"
 ```
 
@@ -50,14 +59,14 @@ lab_honor_probe{job="sdk-metric-job",instance="sdk-metric-instance"} 1
 For cases such as `U06` and `U10`, `UnderscoreEscapingWithSuffixes` maps dotted primary identity onto the same Prometheus label keys as the recovered underscore attributes. Prometheus preserves both values by joining them:
 
 ```text
-service_name="case-u06-receiver;checkout"
+service_name="identity-lab-source;checkout"
 service_instance_id="c36-sdk:9464;sdk-1"
 ```
 
 For `U08` and `U12`, `NoTranslation` keeps the concepts distinguishable:
 
 ```text
-service.name="case-u08-receiver"
+service.name="identity-lab-source"
 service_name="checkout"
 service.instance.id="c36-sdk:9464"
 service_instance_id="sdk-1"

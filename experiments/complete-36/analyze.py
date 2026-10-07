@@ -76,18 +76,24 @@ def main():
                 check(case_id, "SDK exposition flattened service_instance_id", 'service_instance_id="sdk-1"' in source_text)
 
             if not case.get("collector"):
-                expected = [(f"case-{case_id.lower()}-final", "c36-sdk:9464")]
+                expected = [("identity-lab-final", "c36-sdk:9464")]
             elif case["final"] == "scrape" and not case["final_honor"]:
-                expected = [(f"case-{case_id.lower()}-final", "c36-collector:9464")]
+                expected = [("identity-lab-final", "c36-collector:9464")]
             elif case["source_strategy"] == "NoTranslation":
                 expected = [("payments/checkout", "sdk-1")]
             else:
-                expected = [(f"case-{case_id.lower()}-receiver", "c36-sdk:9464")]
+                expected = [("identity-lab-source", "c36-sdk:9464")]
             check(
                 case_id,
                 "ordinary identity matches source-strategy semantics",
                 identity_pairs(ordinary) == expected,
                 f"expected={expected} actual={identity_pairs(ordinary)}",
+            )
+            check(
+                case_id,
+                "ordinary identity contains no case-derived value",
+                all(case_id.lower() not in (job + instance).lower() and "case-" not in (job + instance).lower() for job, instance in identity_pairs(ordinary)),
+                f"actual={identity_pairs(ordinary)}",
             )
 
             expected_target_info = 2 if case.get("collector") and case.get("receiver_honor") else 1
@@ -137,6 +143,7 @@ def main():
             "dotted_identity_authority": identity_authority(dotted["tuple"]),
             "underscore_target_info_count": len(underscore["target_info_series"]),
             "dotted_target_info_count": len(dotted["target_info_series"]),
+            "ordinary_identity_changed": identity_pairs(underscore["ordinary_series"]) != identity_pairs(dotted["ordinary_series"]),
             "identity_authority_changed": identity_authority(underscore["tuple"]) != identity_authority(dotted["tuple"]),
         })
 

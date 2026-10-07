@@ -17,7 +17,7 @@ Open `http://localhost:4173`.
 - OpenTelemetry Collector Contrib `0.162.0`
 - Prometheus `3.14.0`
 - 58/58 exact zero-or-one-Collector configurations covered
-- 632/632 named assertions passed
+- 676/676 named assertions passed
 - Included: `job`, `instance`, OTel resource identity, and `target_info`
 - Excluded: metric names/types, scope data, histograms, timestamps, temporality, exemplars, and HELP/TYPE/UNIT
 
@@ -28,6 +28,8 @@ Trace mode follows identity through one pipeline and supports a contiguous bound
 ## Reproduce the Lab matrix
 
 The full Docker test harness is checked in under [`experiments/complete-36`](experiments/complete-36). The historical directory name is retained so existing links keep working; the harness now executes the expanded 58-case matrix against fresh Prometheus storage, captures every boundary, and regenerates the assertion report, source-strategy comparison, and coverage manifest.
+
+The reproduction fixture uses stable scrape jobs across the matrix: `identity-lab-source` at the Collector receiver and `identity-lab-final` at the final Prometheus scrape. Case attribution is carried separately by `coverage_case`.
 
 ```bash
 ./experiments/complete-36/run.sh

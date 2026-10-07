@@ -31,7 +31,7 @@ def main():
         target = "c36-collector:9464" if case.get("collector") else "c36-sdk:9464"
         prom_lines += [
             "scrape_configs:",
-            f"  - job_name: case-{case_id.lower()}-final",
+            "  - job_name: identity-lab-final",
             f"    honor_labels: {yn(case['final_honor'])}",
             "    scrape_protocols: [OpenMetricsText1.0.0, PrometheusText1.0.0, PrometheusText0.0.4]",
             "    static_configs:",
@@ -62,7 +62,7 @@ def main():
                 "  prometheus/source:",
                 "    config:",
                 "      scrape_configs:",
-                f"        - job_name: case-{case_id.lower()}-receiver",
+                "        - job_name: identity-lab-source",
                 "          scrape_interval: 1s",
                 f"          honor_labels: {yn(case['receiver_honor'])}",
                 "          static_configs:",
