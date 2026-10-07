@@ -3,7 +3,7 @@
 ## Editorial sources
 
 - Editorial Brain: https://docs.google.com/document/d/1GNSNFgrh09Qq677mEqfLFe62DdKGtH0W4-wAOogQS2c
-- Lab report: https://docs.google.com/document/d/1LKj4Ey2WGNCW45PQFE5W3CgSUuXRlzq7vxcib6llpHU
+- Complete Lab report: https://docs.google.com/document/d/1NcVE-wGccI8HcNW2TFuiN3mBDNtKw5h6-Kw7gb7rRGk/edit
 - Canonical Markdown: https://drive.google.com/file/d/1Tk_u0ocZVLu19xnzVMficZgkohsjwzFF/view
 - Reproducibility archive: https://drive.google.com/file/d/1U4NV0Z7ahvBDOufBusfHNNamdrl8By8X/view
 - Canonical positioning reference: `conversa_prometheus_otel_dots.pdf` from the referenced ChatGPT conversation.

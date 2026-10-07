@@ -22,3 +22,13 @@ Open `http://localhost:4173`.
 - Excluded: metric names/types, scope data, histograms, timestamps, temporality, exemplars, and HELP/TYPE/UNIT
 
 The workbench uses a constrained topology: the OTel SDK source and final Prometheus server are fixed, optional stages are inserted between them, and each Collector is represented as a receiver/exporter pair. Receivers and Prometheus ingestion modes follow the adjacent protocol automatically; exporters remain switchable. Every configuration with zero or one Collector maps to its exact Lab case ID. Intermediate Prometheus relays and multi-Collector graphs remain outside the complete matrix and are labeled accordingly.
+
+## Reproduce the Lab matrix
+
+The full Docker test harness is checked in under [`experiments/complete-36`](experiments/complete-36). It rebuilds the SDK fixture, executes all 36 configurations against fresh Prometheus storage, captures every boundary, and regenerates the assertion report and coverage manifest.
+
+```bash
+./experiments/complete-36/run.sh
+```
+
+See the [complete reproduction guide](experiments/complete-36/README.md) for prerequisites, evidence layout, inspection commands, expected results, and troubleshooting.
