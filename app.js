@@ -251,7 +251,7 @@ function stateRows(state){
   if(state.resource)for(const [k,v]of Object.entries(state.resource))rows.push([k,v]);
   if(state.labels)for(const [k,v]of Object.entries(state.labels))if(v)rows.push([k,v]);
   if(state.targetInfo){const entries={...(state.targetInfoLabels||state.labels||{}),...state.targetInfo};rows.push(["target_info","present"]);for(const [k,v]of Object.entries(entries))if(v)rows.push([`target_info.${k}`,v])}
-  return rows;
+  return rows.sort(([left],[right])=>left<right?-1:left>right?1:0);
 }
 function comparable(value){return String(value??"").trim().toLowerCase()}
 function valuesRelated(a,b){
