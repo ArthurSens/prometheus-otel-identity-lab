@@ -70,6 +70,7 @@ let selectedRange={start:0,end:0};
 let compareSelections={a:0,b:0};
 let activeConnections=[];
 let connectionMode="trace";
+let fieldFocus=null;
 let alternatives=null;
 let alternativesIndex=new Map();
 let variantOptions={a:"current",b:"current"};
@@ -313,10 +314,46 @@ function drawFieldConnectors(){
     const a=fromEl.getBoundingClientRect(),b=toEl.getBoundingClientRect();let d;
     if(vertical){const x1=a.left+a.width/2-gridRect.left,y1=a.bottom-gridRect.top,x2=b.left+b.width/2-gridRect.left,y2=b.top-gridRect.top,mid=(y1+y2)/2;d=connectionMode==="compare"?`M ${x1} ${y1} L ${x2} ${y2}`:`M ${x1} ${y1} C ${x1} ${mid}, ${x2} ${mid}, ${x2} ${y2}`}
     else{const x1=a.right-gridRect.left,y1=a.top+a.height/2-gridRect.top,x2=b.left-gridRect.left,y2=b.top+b.height/2-gridRect.top,mid=(x1+x2)/2;d=connectionMode==="compare"?`M ${x1} ${y1} L ${x2} ${y2}`:`M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`}
-    return `<path class="field-link ${connectionMode==="compare"?"compare-field-link ":""}link-${status}" d="${d}" ${connectionMode==="trace"?`marker-end="url(#arrow-${status})"`:""}/>`;
+    return `<path class="field-link ${connectionMode==="compare"?"compare-field-link ":""}link-${status}" data-from-row="${from}" data-to-row="${to}" d="${d}" ${connectionMode==="trace"?`marker-end="url(#arrow-${status})"`:""}/>`;
   }).join("");
   svg.innerHTML=`<defs><marker id="arrow-unchanged" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#69737a"/></marker><marker id="arrow-remapped" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#9a7200"/></marker></defs>${paths}`;
   grid.classList.toggle("has-field-links",Boolean(paths));grid.classList.toggle("is-comparison",connectionMode==="compare");
+  if(fieldFocus)applyFieldFocus(fieldFocus.side,fieldFocus.index);
+}
+function clearFieldFocus(){
+  fieldFocus=null;
+  const grid=document.querySelector(".inspector-grid");
+  if(!grid)return;
+  grid.classList.remove("has-field-focus");
+  grid.querySelectorAll(".is-field-focus").forEach(element=>element.classList.remove("is-field-focus"));
+}
+function applyFieldFocus(side,index){
+  fieldFocus={side,index};
+  const grid=document.querySelector(".inspector-grid");
+  if(!grid)return;
+  grid.querySelectorAll(".is-field-focus").forEach(element=>element.classList.remove("is-field-focus"));
+  grid.classList.add("has-field-focus");
+  const before=new Set(side==="before"?[index]:[]),after=new Set(side==="after"?[index]:[]);
+  activeConnections.forEach(({from,to})=>{
+    if((side==="before"&&from===index)||(side==="after"&&to===index)){before.add(from);after.add(to)}
+  });
+  before.forEach(row=>document.querySelector(`#before-state [data-row-index="${row}"]`)?.classList.add("is-field-focus"));
+  after.forEach(row=>document.querySelector(`#after-state [data-row-index="${row}"]`)?.classList.add("is-field-focus"));
+  grid.querySelectorAll(".field-link").forEach(path=>{
+    const related=side==="before"?+path.dataset.fromRow===index:+path.dataset.toRow===index;
+    path.classList.toggle("is-field-focus",related);
+  });
+}
+function bindFieldFocus(){
+  [["before","#before-state"],["after","#after-state"]].forEach(([side,selector])=>{
+    document.querySelectorAll(`${selector} .state-row`).forEach(row=>{
+      const index=+row.dataset.rowIndex;
+      row.onmouseenter=()=>applyFieldFocus(side,index);
+      row.onmouseleave=()=>{if(document.activeElement!==row)clearFieldFocus()};
+      row.onfocus=()=>applyFieldFocus(side,index);
+      row.onblur=()=>{if(!row.matches(":hover"))clearFieldFocus()};
+    });
+  });
 }
 function renderLegend(mode){document.querySelector("#diff-legend").innerHTML=mode==="compare"?`<span><i class="diff-swatch diff-unchanged"></i>Unchanged</span><span><i class="diff-swatch diff-derived"></i>New</span><span><i class="diff-swatch diff-lost"></i>Lost</span>`:`<span><i class="diff-swatch diff-unchanged"></i>Same</span><span><i class="diff-swatch diff-remapped"></i>Remapped</span><span><i class="diff-swatch diff-derived"></i>New / derived</span><span><i class="diff-swatch diff-lost"></i>Lost</span>`}
 function nodeAction(node,input){if(node.type==="collector")return `${RECEIVER[input.protocol]} → ${EXPORTER[node.exporter]}`;return `${INGEST[input.protocol]} → storage`}
@@ -393,6 +430,7 @@ function componentName(node){return node.type==="source"?"OTel SDK":node.type===
 function componentPathName(node,index,logical){if(node.type==="collector"){const total=logical.filter(item=>item.type==="collector").length,ordinal=logical.slice(0,index+1).filter(item=>item.type==="collector").length;return total>1?`Collector ${ordinal}`:"Collector"}return componentName(node)}
 function renderInspector(){
   if(comparisonMode){renderComparisonInspector();return}
+  clearFieldFocus();
   connectionMode="trace";renderLegend("trace");
   const result=computeVariant("a"),{logical,states}=result,start=selectedRange.start,end=selectedRange.end,before=states[start],after=states[end+1],nodes=logical.slice(start+1,end+2),path=logical.slice(start,end+2),beforeRows=stateRows(before),afterRows=stateRows(after),classifiedBefore=classifyRows(beforeRows,afterRows,"before"),classifiedAfter=classifyRows(afterRows,beforeRows,"after"),total=logical.length-1,count=end-start+1,beforePanel=document.querySelector("#before-state").closest(".state-panel"),afterPanel=document.querySelector("#after-state").closest(".state-panel");
   beforePanel.dataset.family=protocolFamily(before.protocol);afterPanel.dataset.family=protocolFamily(after.protocol);
@@ -401,11 +439,12 @@ function renderInspector(){
   document.querySelector("#boundary-stepper").textContent=count===1?`${String(start+1).padStart(2,"0")} / ${String(total).padStart(2,"0")}`:`${String(start+1).padStart(2,"0")}–${String(end+1).padStart(2,"0")} / ${String(total).padStart(2,"0")}`;
   document.querySelector("#before-panel-label").textContent="BEFORE";document.querySelector("#after-panel-label").textContent="AFTER";document.querySelector("#before-kind").textContent=`${before.kind} · ${PROTOCOL[before.protocol]}`;document.querySelector("#after-kind").textContent=`${after.kind} · ${PROTOCOL[after.protocol]}`;
   document.querySelector("#before-state").innerHTML=renderRows(classifiedBefore);document.querySelector("#after-state").innerHTML=renderRows(classifiedAfter);
-  activeConnections=connectionPairs(classifiedBefore,classifiedAfter);requestAnimationFrame(()=>requestAnimationFrame(drawFieldConnectors));
+  activeConnections=connectionPairs(classifiedBefore,classifiedAfter);bindFieldFocus();requestAnimationFrame(()=>requestAnimationFrame(drawFieldConnectors));
   document.querySelector("#transform-verb").textContent=count===1?nodeAction(nodes[0],before):`${count} components in sequence`;
   const explanation=nodes.map((node,i)=>count===1?interpretation(node,states[start+i]):`<strong>${i+1}. ${componentPathName(node,start+i+1,logical)}:</strong> ${interpretation(node,states[start+i])}`).join(" "),evidence=matchedCoverageCase();document.querySelector("#interpretation").innerHTML=`<span>${variantEvidenceLabel(result,evidence)}</span><p>${explanation}${variantNarrative(result)}</p>`;
 }
 function renderComparisonInspector(){
+  clearFieldFocus();
   connectionMode="compare";renderLegend("compare");
   // Keep the data model lane aligned with the controls shown above it. Without
   // the explicit lane, both computations silently default to Pipeline A's
@@ -417,12 +456,12 @@ function renderComparisonInspector(){
   document.querySelector("#boundary-stepper").textContent=`A ${String(aIndex+1).padStart(2,"0")}/${String(a.logical.length-1).padStart(2,"0")} · B ${String(bIndex+1).padStart(2,"0")}/${String(b.logical.length-1).padStart(2,"0")}`;
   document.querySelector("#before-panel-label").textContent="PIPELINE A";document.querySelector("#after-panel-label").textContent="PIPELINE B";document.querySelector("#before-kind").textContent=`${aState.kind} · ${PROTOCOL[aState.protocol]}`;document.querySelector("#after-kind").textContent=`${bState.kind} · ${PROTOCOL[bState.protocol]}`;
   document.querySelector("#before-state").innerHTML=renderRows(classifiedA);document.querySelector("#after-state").innerHTML=renderRows(classifiedB);
-  activeConnections=connectionPairs(classifiedA,classifiedB,"compare");requestAnimationFrame(()=>requestAnimationFrame(drawFieldConnectors));
+  activeConnections=connectionPairs(classifiedA,classifiedB,"compare");bindFieldFocus();requestAnimationFrame(()=>requestAnimationFrame(drawFieldConnectors));
   document.querySelector("#transform-verb").textContent="label correlation · not data flow";
   const changed=new Set([...classifiedA.filter(row=>row[2]!=="unchanged").map(row=>row[0]),...classifiedB.filter(row=>row[2]!=="unchanged").map(row=>row[0])]).size,symbolic=[a,b].some(result=>result.variant.prediction?.confidence==="symbolic"),summary=symbolic?"Exact output comparison is unavailable because at least one selected design is symbolic.":changed?`${changed} identity field${changed===1?"":"s"} differ at this output.`:"The identity fields are identical at this output.",narratives=[variantNarrative(a),variantNarrative(b)].filter(Boolean).filter((value,index,items)=>items.indexOf(value)===index).join("");
   document.querySelector("#interpretation").innerHTML=`<span>A: ${variantEvidenceLabel(a,aEvidence)} · B: ${variantEvidenceLabel(b,bEvidence)}</span><p>${summary} Change protocols, component configuration, or the behavior alternative independently in either pipeline.${narratives}</p>`;
 }
-function renderRows(rows,empty="No identity fields recorded here."){const labels={unchanged:connectionMode==="compare"?"unchanged":"same",remapped:"remapped",derived:"new",lost:"lost"};return rows.length?rows.map(([k,v,status,detail],index)=>`<div class="state-row diff-${status}" data-row-index="${index}"><span>${k}<em class="change-tag">${detail||labels[status]}</em></span><b>${v??"—"}</b></div>`).join(""):`<div class="empty-state">${empty}</div>`}
+function renderRows(rows,empty="No identity fields recorded here."){const labels={unchanged:connectionMode==="compare"?"unchanged":"same",remapped:"remapped",derived:"new",lost:"lost"};return rows.length?rows.map(([k,v,status,detail],index)=>`<div class="state-row diff-${status}" data-row-index="${index}" tabindex="0"><span>${k}<em class="change-tag">${detail||labels[status]}</em></span><b>${v??"—"}</b></div>`).join(""):`<div class="empty-state">${empty}</div>`}
 function render(){clampSelections();renderControls();renderWorkbench()}
 render();
 fetch(ALTERNATIVES_URL).then(response=>{if(!response.ok)throw new Error(`Alternative data: ${response.status}`);return response.json()}).then(data=>{alternatives=data;alternativesIndex=new Map(data.predictions.map(prediction=>[`${prediction.case_id}|${prediction.profile_id}`,prediction]));render()}).catch(error=>{console.error(error);alternatives={error:true};render()});

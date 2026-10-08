@@ -200,5 +200,11 @@ footer{border-top:3px solid transparent;border-image:linear-gradient(90deg,var(-
 .inspector-grid.has-field-links .transform-column{justify-content:flex-end;padding-bottom:14px}
 .inspector-grid.has-field-links .transform-glyph{display:none}
 .inspector-grid.has-field-links .transform-column span{max-width:92px;background:rgba(255,255,255,.92);padding:5px 6px;border:1px solid #d8dcde}
+.state-row,.field-link{transition:opacity .16s ease,filter .16s ease,stroke-width .16s ease}
+.state-row:focus-visible{outline:2px solid var(--otel);outline-offset:-2px}
+.inspector-grid.has-field-focus .state-row{opacity:.16;filter:saturate(.35)}
+.inspector-grid.has-field-focus .state-row.is-field-focus{opacity:1;filter:none}
+.inspector-grid.has-field-focus .field-link{opacity:.06}
+.inspector-grid.has-field-focus .field-link.is-field-focus{opacity:1;stroke-width:2.5}
 @media(max-width:720px){.inspector-grid.has-field-links .transform-column{justify-content:center;padding-bottom:0}.field-link{opacity:.58}.inspector-grid.has-field-links .transform-column span{max-width:180px}}
 @media(min-width:721px) and (max-width:1050px){.pipe-node.composite.fixed-node{min-width:150px;max-width:155px}.pipe-node.composite:not(.fixed-node){min-width:196px;max-width:200px}.pipe-arrow{flex-basis:38px;min-width:38px;width:38px;margin:0 2px}}
