@@ -259,8 +259,14 @@ function valuesRelated(a,b){
   const left=comparable(a),right=comparable(b);
   if(!left||!right||left==="present"||right==="present")return false;
   if(left===right)return true;
-  if(left.length<3||right.length<3)return false;
-  return left.includes(right)||right.includes(left);
+  // Only recognize compositions that this experiment actually creates. A
+  // slash joins namespace/name into `job`; a semicolon joins colliding values.
+  // General substring matching is unsafe (`lab` is not the source of
+  // `identity-lab-source`).
+  const parts=value=>value.split(/[;/]/).map(part=>part.trim()).filter(Boolean);
+  const leftParts=parts(left),rightParts=parts(right);
+  if(leftParts.length===1&&rightParts.length===1)return false;
+  return leftParts.some(part=>rightParts.includes(part));
 }
 function classifyRows(rows,otherRows,side){
   return rows.map(([key,value])=>{
