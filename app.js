@@ -400,7 +400,10 @@ function renderInspector(){
 }
 function renderComparisonInspector(){
   connectionMode="compare";renderLegend("compare");
-  const a=computeFor(model),b=computeFor(compareModel),aIndex=compareSelections.a,bIndex=compareSelections.b,aState=a.states[aIndex+1],bState=b.states[bIndex+1],aRows=stateRows(aState),bRows=stateRows(bState),classifiedA=classifyRows(aRows,bRows,"before"),classifiedB=classifyRows(bRows,aRows,"after"),aEvidence=evidenceFor(model),bEvidence=evidenceFor(compareModel),beforePanel=document.querySelector("#before-state").closest(".state-panel"),afterPanel=document.querySelector("#after-state").closest(".state-panel"),aPath=a.logical.slice(0,aIndex+2).map((node,i)=>componentPathName(node,i,a.logical)).join(" → "),bPath=b.logical.slice(0,bIndex+2).map((node,i)=>componentPathName(node,i,b.logical)).join(" → ");
+  // Keep the data model lane aligned with the controls shown above it. Without
+  // the explicit lane, both computations silently default to Pipeline A's
+  // behavior selection even though Pipeline B displays its own selection.
+  const a=computeFor(model,"a"),b=computeFor(compareModel,"b"),aIndex=compareSelections.a,bIndex=compareSelections.b,aState=a.states[aIndex+1],bState=b.states[bIndex+1],aRows=stateRows(aState),bRows=stateRows(bState),classifiedA=classifyRows(aRows,bRows,"before"),classifiedB=classifyRows(bRows,aRows,"after"),aEvidence=evidenceFor(model),bEvidence=evidenceFor(compareModel),beforePanel=document.querySelector("#before-state").closest(".state-panel"),afterPanel=document.querySelector("#after-state").closest(".state-panel"),aPath=a.logical.slice(0,aIndex+2).map((node,i)=>componentPathName(node,i,a.logical)).join(" → "),bPath=b.logical.slice(0,bIndex+2).map((node,i)=>componentPathName(node,i,b.logical)).join(" → ");
   beforePanel.dataset.family=protocolFamily(aState.protocol);afterPanel.dataset.family=protocolFamily(bState.protocol);
   document.querySelector("#inspector-range-label").textContent="PIPELINE OUTPUT COMPARISON";
   document.querySelector("#inspector-title").textContent=`A · ${aPath}  ↔  B · ${bPath}`;
