@@ -300,6 +300,22 @@ function connectionPairs(beforeRows,afterRows,mode="trace"){
     if(!matches.length)matches=afterRows.map(([key,value],to)=>({key,value,to})).filter(item=>valuesRelated(beforeValue,item.value));
     matches.forEach(item=>{const afterStatus=afterRows[item.to][2];if(afterStatus!=="derived"&&afterStatus!=="lost")pairs.push({from,to:item.to,status:beforeStatus==="unchanged"&&afterStatus==="unchanged"?"unchanged":"remapped"})});
   });
+  // Classification is symmetric, while the primary matching pass above starts
+  // from the input side. A source field can therefore prefer its same-name
+  // output and leave another valid remapped output (for example `job`) without
+  // an incoming connector. Backfill any classified field that is still
+  // uncovered, using the same match precedence as the primary pass.
+  const addBestMatches=(row,rows,onMatch)=>{
+    const [key,value]=row,eligible=rows.map(([otherKey,otherValue,status],index)=>({key:otherKey,value:otherValue,status,index})).filter(item=>item.status!=="derived"&&item.status!=="lost");
+    let matches=eligible.filter(item=>item.key===key&&comparable(item.value)===comparable(value));
+    if(!matches.length)matches=eligible.filter(item=>item.key===key);
+    if(!matches.length)matches=eligible.filter(item=>comparable(item.value)===comparable(value));
+    if(!matches.length)matches=eligible.filter(item=>valuesRelated(value,item.value));
+    matches.forEach(onMatch);
+  };
+  const addPair=(from,to)=>{if(!pairs.some(pair=>pair.from===from&&pair.to===to)){const beforeStatus=beforeRows[from][2],afterStatus=afterRows[to][2];pairs.push({from,to,status:beforeStatus==="unchanged"&&afterStatus==="unchanged"?"unchanged":"remapped"})}};
+  afterRows.forEach((row,to)=>{if(row[2]!=="derived"&&row[2]!=="lost"&&!pairs.some(pair=>pair.to===to))addBestMatches(row,beforeRows,item=>addPair(item.index,to))});
+  beforeRows.forEach((row,from)=>{if(row[2]!=="derived"&&row[2]!=="lost"&&!pairs.some(pair=>pair.from===from))addBestMatches(row,afterRows,item=>addPair(from,item.index))});
   return pairs;
 }
 function drawFieldConnectors(){
