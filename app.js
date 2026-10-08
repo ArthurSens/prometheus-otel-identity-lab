@@ -272,6 +272,13 @@ function classifyRows(rows,otherRows,side){
     return [key,value,side==="before"?"lost":"derived"];
   });
 }
+function classifyComparisonRows(rows,otherRows,side){
+  return rows.map(([key,value])=>{
+    const exact=otherRows.some(([otherKey,otherValue])=>otherKey===key&&comparable(otherValue)===comparable(value));
+    if(exact)return [key,value,"unchanged"];
+    return [key,value,side==="before"?"lost":"derived"];
+  });
+}
 function connectionPairs(beforeRows,afterRows,mode="trace"){
   if(mode==="compare"){
     const used=new Set(),pairs=[];
@@ -311,7 +318,7 @@ function drawFieldConnectors(){
   svg.innerHTML=`<defs><marker id="arrow-unchanged" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#69737a"/></marker><marker id="arrow-remapped" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#9a7200"/></marker></defs>${paths}`;
   grid.classList.toggle("has-field-links",Boolean(paths));grid.classList.toggle("is-comparison",connectionMode==="compare");
 }
-function renderLegend(mode){document.querySelector("#diff-legend").innerHTML=mode==="compare"?`<span><i class="diff-swatch diff-unchanged"></i>Same label + value</span><span><i class="diff-swatch diff-remapped"></i>Changed / remapped</span><span><i class="diff-swatch diff-derived"></i>Only in B</span><span><i class="diff-swatch diff-lost"></i>Only in A</span>`:`<span><i class="diff-swatch diff-unchanged"></i>Same</span><span><i class="diff-swatch diff-remapped"></i>Remapped</span><span><i class="diff-swatch diff-derived"></i>New / derived</span><span><i class="diff-swatch diff-lost"></i>Lost</span>`}
+function renderLegend(mode){document.querySelector("#diff-legend").innerHTML=mode==="compare"?`<span><i class="diff-swatch diff-unchanged"></i>Unchanged</span><span><i class="diff-swatch diff-derived"></i>New</span><span><i class="diff-swatch diff-lost"></i>Lost</span>`:`<span><i class="diff-swatch diff-unchanged"></i>Same</span><span><i class="diff-swatch diff-remapped"></i>Remapped</span><span><i class="diff-swatch diff-derived"></i>New / derived</span><span><i class="diff-swatch diff-lost"></i>Lost</span>`}
 function nodeAction(node,input){if(node.type==="collector")return `${RECEIVER[input.protocol]} → ${EXPORTER[node.exporter]}`;return `${INGEST[input.protocol]} → storage`}
 function interpretation(node,input){
   if(node.type==="collector"){const receive=input.protocol==="otlp"?"The OTLP receiver preserves structured resource identity.":`The ${RECEIVER[input.protocol]} uses its scrape identity, then reconstructs primary resource identity from job and instance and consumes target_info into resource attributes.`;const send=node.exporter==="otlp"?"The OTLP exporter keeps the resulting resource structured.":`The ${EXPORTER[node.exporter]} projects the resulting resource into job, instance, and target_info using its translation strategy.`;return `${receive} ${send}`}
@@ -403,7 +410,7 @@ function renderComparisonInspector(){
   // Keep the data model lane aligned with the controls shown above it. Without
   // the explicit lane, both computations silently default to Pipeline A's
   // behavior selection even though Pipeline B displays its own selection.
-  const a=computeFor(model,"a"),b=computeFor(compareModel,"b"),aIndex=compareSelections.a,bIndex=compareSelections.b,aState=a.states[aIndex+1],bState=b.states[bIndex+1],aRows=stateRows(aState),bRows=stateRows(bState),classifiedA=classifyRows(aRows,bRows,"before"),classifiedB=classifyRows(bRows,aRows,"after"),aEvidence=evidenceFor(model),bEvidence=evidenceFor(compareModel),beforePanel=document.querySelector("#before-state").closest(".state-panel"),afterPanel=document.querySelector("#after-state").closest(".state-panel"),aPath=a.logical.slice(0,aIndex+2).map((node,i)=>componentPathName(node,i,a.logical)).join(" → "),bPath=b.logical.slice(0,bIndex+2).map((node,i)=>componentPathName(node,i,b.logical)).join(" → ");
+  const a=computeFor(model,"a"),b=computeFor(compareModel,"b"),aIndex=compareSelections.a,bIndex=compareSelections.b,aState=a.states[aIndex+1],bState=b.states[bIndex+1],aRows=stateRows(aState),bRows=stateRows(bState),classifiedA=classifyComparisonRows(aRows,bRows,"before"),classifiedB=classifyComparisonRows(bRows,aRows,"after"),aEvidence=evidenceFor(model),bEvidence=evidenceFor(compareModel),beforePanel=document.querySelector("#before-state").closest(".state-panel"),afterPanel=document.querySelector("#after-state").closest(".state-panel"),aPath=a.logical.slice(0,aIndex+2).map((node,i)=>componentPathName(node,i,a.logical)).join(" → "),bPath=b.logical.slice(0,bIndex+2).map((node,i)=>componentPathName(node,i,b.logical)).join(" → ");
   beforePanel.dataset.family=protocolFamily(aState.protocol);afterPanel.dataset.family=protocolFamily(bState.protocol);
   document.querySelector("#inspector-range-label").textContent="PIPELINE OUTPUT COMPARISON";
   document.querySelector("#inspector-title").textContent=`A · ${aPath}  ↔  B · ${bPath}`;
@@ -415,7 +422,7 @@ function renderComparisonInspector(){
   const changed=new Set([...classifiedA.filter(row=>row[2]!=="unchanged").map(row=>row[0]),...classifiedB.filter(row=>row[2]!=="unchanged").map(row=>row[0])]).size,symbolic=[a,b].some(result=>result.variant.prediction?.confidence==="symbolic"),summary=symbolic?"Exact output comparison is unavailable because at least one selected design is symbolic.":changed?`${changed} identity field${changed===1?"":"s"} differ at this output.`:"The identity fields are identical at this output.",narratives=[variantNarrative(a),variantNarrative(b)].filter(Boolean).filter((value,index,items)=>items.indexOf(value)===index).join("");
   document.querySelector("#interpretation").innerHTML=`<span>A: ${variantEvidenceLabel(a,aEvidence)} · B: ${variantEvidenceLabel(b,bEvidence)}</span><p>${summary} Change protocols, component configuration, or the behavior alternative independently in either pipeline.${narratives}</p>`;
 }
-function renderRows(rows,empty="No identity fields recorded here."){const labels={unchanged:"same",remapped:"remapped",derived:connectionMode==="compare"?"only in B":"new",lost:connectionMode==="compare"?"only in A":"lost"};return rows.length?rows.map(([k,v,status,detail],index)=>`<div class="state-row diff-${status}" data-row-index="${index}"><span>${k}<em class="change-tag">${detail||labels[status]}</em></span><b>${v??"—"}</b></div>`).join(""):`<div class="empty-state">${empty}</div>`}
+function renderRows(rows,empty="No identity fields recorded here."){const labels={unchanged:connectionMode==="compare"?"unchanged":"same",remapped:"remapped",derived:"new",lost:"lost"};return rows.length?rows.map(([k,v,status,detail],index)=>`<div class="state-row diff-${status}" data-row-index="${index}"><span>${k}<em class="change-tag">${detail||labels[status]}</em></span><b>${v??"—"}</b></div>`).join(""):`<div class="empty-state">${empty}</div>`}
 function render(){clampSelections();renderControls();renderWorkbench()}
 render();
 fetch(ALTERNATIVES_URL).then(response=>{if(!response.ok)throw new Error(`Alternative data: ${response.status}`);return response.json()}).then(data=>{alternatives=data;alternativesIndex=new Map(data.predictions.map(prediction=>[`${prediction.case_id}|${prediction.profile_id}`,prediction]));render()}).catch(error=>{console.error(error);alternatives={error:true};render()});
